@@ -2,6 +2,9 @@
 """Test del ponte di configurazione: le chiavi di config.yaml devono essere VIVE."""
 
 import os
+import shutil
+import tempfile
+from unittest import mock
 
 import yaml
 
@@ -108,3 +111,78 @@ def test_unwired_keys_are_declared_as_documentation():
     assert "fluent_variables" in config
     assert "coordinate_system" in config
     assert config["reference_values"]["wheelbase"] == 1.535
+
+
+# ------------------------------------------------------------------------------
+# Ritrovamento del config.yaml: sorgenti, eseguibile PyInstaller e default
+# ------------------------------------------------------------------------------
+def _temp_dir():
+    return tempfile.mkdtemp(prefix="dsh_cfg_")
+
+
+def _write_config(folder, assembly="front_wing"):
+    path = os.path.join(folder, "config.yaml")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("project:\n  assembly_type: %s\n" % assembly)
+    return path
+
+
+def test_config_is_found_next_to_the_application():
+    """Nell'exe il config.yaml sta accanto all'eseguibile: deve essere usato."""
+    folder = _temp_dir()
+    try:
+        path = _write_config(folder)
+        with mock.patch.object(cb, "app_dir", return_value=folder), \
+                mock.patch.object(cb, "bundled_dir", return_value=folder):
+            assert cb.find_config_path() == path
+            loaded, source = cb.load_config()
+            assert source == path
+            assert loaded["project"]["assembly_type"] == "front_wing"
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_explicit_config_wins():
+    folder = _temp_dir()
+    try:
+        path = _write_config(folder, assembly="rear_wing")
+        with mock.patch.object(cb, "app_dir", return_value=folder), \
+                mock.patch.object(cb, "bundled_dir", return_value=folder):
+            loaded, source = cb.load_config(path)
+            assert source == path
+            assert loaded["project"]["assembly_type"] == "rear_wing"
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_missing_config_falls_back_to_defaults():
+    """Senza alcun config.yaml si usano i default interni, dichiarandolo (source=None)."""
+    folder = _temp_dir()
+    try:
+        with mock.patch.object(cb, "app_dir", return_value=folder), \
+                mock.patch.object(cb, "bundled_dir", return_value=folder):
+            assert cb.find_config_path() is None
+            loaded, source = cb.load_config()
+            assert source is None
+            assert loaded["reference_values"]["velocity_inf"] == 14.0
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_nonexistent_explicit_path_does_not_crash():
+    assert cb.find_config_path(os.path.join(_temp_dir(), "assente.yaml")) is None
+
+
+def test_app_dir_uses_executable_when_frozen():
+    """Nel bundle congelato `__file__` punta alla cartella temporanea: vale sys.executable."""
+    fake_exe = os.path.join(os.sep, "apps", "FS-MetaPostDiag.exe")
+    with mock.patch.object(cb.sys, "frozen", True, create=True), \
+            mock.patch.object(cb.sys, "executable", fake_exe):
+        # app_dir normalizza con abspath: su Windows aggiunge la lettera di unita'
+        assert cb.app_dir() == os.path.dirname(os.path.abspath(fake_exe))
+
+
+def test_bundled_dir_uses_meipass_when_frozen():
+    meipass = os.path.join(os.sep, "tmp", "_MEI1234")
+    with mock.patch.object(cb.sys, "_MEIPASS", meipass, create=True):
+        assert cb.bundled_dir() == meipass

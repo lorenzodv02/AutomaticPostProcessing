@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.0.0
+python main.py --version      # FS-MetaPostDiag 1.0.1
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,13 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.0.1 — pacchetto Windows (eseguibile)
+
+- **Build Windows** con PyInstaller (`FS-MetaPostDiag.spec`, `FS-MetaPostDiag.exe`): nessun Python da installare.
+- **La configurazione viene trovata anche nell'exe**: ordine `--config` → accanto all'eseguibile → `config.yaml` incluso nel bundle → default interni. Prima l'exe ignorava il file e usava i default (32 viste invece delle 23 configurate).
+- `main.py` stampa la riga `[CONFIG] <percorso>` all'avvio, così si vede subito da dove arrivano le soglie.
+- Test: `tests/test_packaging.py` verifica che lo spec includa `config.yaml` e `meta_post_worker.py`; nuovi test sul ritrovamento della configurazione.
 
 ### v1.0.0 — configurazione viva, bbox corretto, test e CI
 

@@ -21,7 +21,6 @@ import os
 import sys
 import argparse
 import webbrowser
-import yaml
 
 from meta_driver.launcher import run_postprocessing_session
 from analyzer.image_diagnostics import analyze_and_annotate_images
@@ -29,24 +28,24 @@ from analyzer.aero_plots import generate_aerodynamic_plots
 from analyzer.assembly_rules import evaluate_design_issues
 from analyzer.ai_vision_advisor import generate_ai_vision_commentary
 from reporting.report_builder import build_diagnostic_reports
-from config_bridge import merge_config
+from config_bridge import load_config as load_config_file
 from version import __version__
+
+# Percorso del config.yaml effettivamente usato (None = default interni)
+LAST_CONFIG_PATH = None
 
 
 def load_config(config_path: str = None) -> dict:
     """
-    Carica il file config.yaml e lo fonde sopra i default di `config_bridge`.
+    Carica il `config.yaml` e lo fonde sopra i default di `config_bridge`.
 
-    Prima esistevano due set di default divergenti (questo e config.yaml):
-    una run senza config produceva numeri non confrontabili (16.67 m/s contro 14).
-    Ora la sorgente e' una sola: `config_bridge.DEFAULT_CONFIG`.
+    Ordine di ricerca (vedi `config_bridge.find_config_path`): `--config`, poi
+    accanto all'eseguibile / ai sorgenti, poi il `config.yaml` incluso nel
+    bundle dell'exe. Senza configurazione si usano i default interni.
     """
-    if config_path is None:
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
-    if os.path.isfile(config_path):
-        with open(config_path, "r", encoding="utf-8") as f:
-            return merge_config(yaml.safe_load(f) or {})
-    return merge_config({})
+    global LAST_CONFIG_PATH
+    config, LAST_CONFIG_PATH = load_config_file(config_path)
+    return config
 
 
 def execute_full_diagnostic_pipeline(config: dict, workspace_dir: str = None, log_fn=print, force_meta_batch: bool = True) -> dict:
@@ -165,6 +164,7 @@ def main():
 
     args = parser.parse_args()
     cfg = load_config(args.config)
+    print("[CONFIG] %s" % (LAST_CONFIG_PATH or "default interni (nessun config.yaml trovato)"))
 
     if args.workspace:
         cfg["project"]["workspace_dir"] = args.workspace

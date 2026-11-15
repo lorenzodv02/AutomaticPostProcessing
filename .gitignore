@@ -45,6 +45,12 @@ scratch/
 01_slice_y.png
 02_slice_z.png
 
+# Build PyInstaller (artefatti locali, non versionati)
+build/
+dist/
+_exetmp/
+*.pkg
+
 # Logs
 *.log
 META_post.log

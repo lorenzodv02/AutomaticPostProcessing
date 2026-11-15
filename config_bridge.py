@@ -22,7 +22,11 @@ canoniche, così una run senza `config.yaml` si comporta come prima.
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, Iterable, List, Sequence, Tuple
+import os
+import sys
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
+import yaml
 
 __all__ = [
     "DEFAULT_CONFIG",
@@ -38,6 +42,10 @@ __all__ = [
     "thresholds",
     "cp_range",
     "reference_values",
+    "app_dir",
+    "bundled_dir",
+    "find_config_path",
+    "load_config",
 ]
 
 
@@ -306,3 +314,61 @@ def reference_values(config: Dict[str, Any]) -> Dict[str, float]:
         if isinstance(value, (int, float)):
             out[key] = float(value)
     return out
+
+
+# ------------------------------------------------------------------------------
+# Individuazione del file di configurazione (sorgenti E eseguibile PyInstaller)
+# ------------------------------------------------------------------------------
+def app_dir() -> str:
+    """
+    Cartella dell'applicazione: quella dell'eseguibile se siamo in una build
+    PyInstaller, altrimenti quella dei sorgenti.
+
+    Serve perche' nell'exe `__file__` punta alla cartella temporanea di
+    estrazione: cercare li' il `config.yaml` significherebbe non trovarlo mai.
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def bundled_dir() -> str:
+    """Cartella delle risorse incluse nel bundle (`sys._MEIPASS`), o `app_dir`."""
+    return getattr(sys, "_MEIPASS", app_dir())
+
+
+def find_config_path(explicit: str = None) -> Optional[str]:
+    """
+    Ordine di ricerca del `config.yaml`:
+      1. percorso esplicito (`--config`);
+      2. accanto all'eseguibile (o ai sorgenti) — cosi' l'utente puo' modificarlo
+         senza ricostruire l'exe;
+      3. config.yaml incluso nel bundle (il default della release);
+      4. nessuno: si usano i default interni.
+    """
+    if explicit:
+        return explicit if os.path.isfile(explicit) else None
+
+    candidates = [os.path.join(app_dir(), "config.yaml")]
+    bundled = os.path.join(bundled_dir(), "config.yaml")
+    if bundled not in candidates:
+        candidates.append(bundled)
+
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def load_config(explicit: str = None) -> Tuple[Dict[str, Any], Optional[str]]:
+    """
+    Carica la configurazione e restituisce `(config, percorso_usato)`.
+
+    `percorso_usato` e' `None` quando si ricade sui default interni: e' utile
+    perche' il log possa dire da dove arrivano le soglie.
+    """
+    path = find_config_path(explicit)
+    if path is None:
+        return merge_config({}), None
+    with open(path, "r", encoding="utf-8") as handle:
+        return merge_config(yaml.safe_load(handle) or {}), path
