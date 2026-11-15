@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.0.2
+python main.py --version      # FS-MetaPostDiag 1.0.3
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,13 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.0.3 — avvio senza argomenti e selezione dei file
+
+- **Nessun argomento = GUI**: un doppio clic sull'eseguibile apre l'interfaccia, non la pipeline sulla cartella corrente. Con `-w`, `-a` o `--config` resta la CLI.
+- **Selezione dei file robusta** (`file_discovery.py`): il `.cas` è obbligatorio e la sua assenza produce un messaggio che dice cosa fare, invece di un `FileNotFoundError` con traceback; il `.dat` viene accoppiato per nome base; i file che non sono dataset (es. `*_license.dat` di BETA CAE) vengono ignorati.
+- Errori d'uso stampati come `[ERRORE] ...` con codice di uscita non nullo, senza traceback.
+- 6 nuovi test sul ritrovamento dei file (cartella con solo licenze, accoppiamento per nome, `.cas.h5`).
 
 ### v1.0.2 — icona UniNa Corse
 

@@ -34,30 +34,10 @@ from config_bridge import (
     cp_range as resolve_cp_range,
     cut_stations as resolve_cut_stations,
 )
+# L'individuazione dei file vive in file_discovery.py (modulo leggero, testabile
+# in CI); qui viene solo re-esportata per compatibilita' con chi importa da qui.
+from file_discovery import NoCaseFilesFound, discover_cas_dat  # noqa: F401
 
-
-def discover_cas_dat(workspace_dir: str):
-    """Trova automaticamente la coppia di file .cas (.cas.h5/.cas.gz) e .dat (.dat.h5/.dat.gz)."""
-    cas_patterns = ["*.cas.h5", "*.cas", "*.cas.gz"]
-    dat_patterns = ["*.dat.h5", "*.dat", "*.dat.gz"]
-
-    cas_files = []
-    for pat in cas_patterns:
-        cas_files.extend(glob.glob(os.path.join(workspace_dir, pat)))
-    dat_files = []
-    for pat in dat_patterns:
-        dat_files.extend(glob.glob(os.path.join(workspace_dir, pat)))
-
-    if not cas_files:
-        for pat in cas_patterns:
-            cas_files.extend(glob.glob(os.path.join(workspace_dir, "*", pat)))
-    if not dat_files:
-        for pat in dat_patterns:
-            dat_files.extend(glob.glob(os.path.join(workspace_dir, "*", pat)))
-
-    cas_file = sorted(cas_files)[0] if cas_files else None
-    dat_file = sorted(dat_files)[0] if dat_files else None
-    return cas_file, dat_file
 
 
 def find_meta_executable(configured_path: str = "auto") -> str:

@@ -21,6 +21,7 @@ MODULES = (
     "tests.test_rules_thresholds",
     "tests.test_version",
     "tests.test_packaging",
+    "tests.test_discovery",
 )
 
 

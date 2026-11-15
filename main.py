@@ -29,10 +29,24 @@ from analyzer.assembly_rules import evaluate_design_issues
 from analyzer.ai_vision_advisor import generate_ai_vision_commentary
 from reporting.report_builder import build_diagnostic_reports
 from config_bridge import load_config as load_config_file
+from file_discovery import NoCaseFilesFound
 from version import __version__
 
 # Percorso del config.yaml effettivamente usato (None = default interni)
 LAST_CONFIG_PATH = None
+
+
+def _launch_gui_by_default(argc: int) -> bool:
+    """
+    Vero quando il programma e' stato avviato senza argomenti.
+
+    Un doppio clic sull'eseguibile passa un solo argomento (sys.argv[0]): in quel
+    caso si apre la GUI. Prima invece partiva la pipeline sulla cartella corrente,
+    scegliendo qualunque `*.cas`/`*.dat` presente (su un Desktop poteva essere la
+    licenza di BETA CAE) e finendo in un traceback. Con `-w`, `-a` o `--config`
+    resta la pipeline da riga di comando.
+    """
+    return argc <= 1
 
 
 def load_config(config_path: str = None) -> dict:
@@ -177,17 +191,28 @@ def main():
         model_key = "model_openai" if provider == "openai" else "model_gemini"
         cfg.setdefault("ai_vision", {})[model_key] = args.ai_model
 
-    if args.gui:
+    if args.gui or _launch_gui_by_default(len(sys.argv)):
         from gui_app import launch_gui
+
         launch_gui(cfg, execute_full_diagnostic_pipeline)
-    else:
+        return
+
+    try:
         res = execute_full_diagnostic_pipeline(
             cfg, workspace_dir=args.workspace, force_meta_batch=not args.no_meta_batch
         )
-        if args.open_report:
-            html_p = res["reports"]["html_report"]
-            if os.path.isfile(html_p):
-                webbrowser.open(f"file:///{html_p.replace(os.sep, '/')}")
+    except NoCaseFilesFound as exc:
+        # Errore d'uso, non un bug: messaggio chiaro invece del traceback.
+        print("[ERRORE] %s" % exc)
+        raise SystemExit(2)
+    except (FileNotFoundError, RuntimeError) as exc:
+        print("[ERRORE] %s" % exc)
+        raise SystemExit(1)
+
+    if args.open_report:
+        html_p = res["reports"]["html_report"]
+        if os.path.isfile(html_p):
+            webbrowser.open(f"file:///{html_p.replace(os.sep, '/')}")
 
 
 if __name__ == "__main__":
