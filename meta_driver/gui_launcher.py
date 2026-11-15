@@ -25,6 +25,7 @@ import threading
 import time
 import webbrowser
 
+import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -53,6 +54,7 @@ FONT_NUM = FAMILIES["num"]
 from meta_driver.assemblies import (  # noqa: E402
     ASSEMBLY_CHOICES, ASSEMBLY_LABELS, CASE_DEFAULT_LABEL, LABEL_TO_ASSEMBLY,
 )
+from meta_driver.entry_modes import full_program_command  # noqa: E402
 
 ASSEMBLIES = ASSEMBLY_CHOICES
 ASSEMBLY_VALUES = LABEL_TO_ASSEMBLY
@@ -179,7 +181,8 @@ class LauncherApp:
         modes.pack(fill="x", padx=26)
         self.mode_buttons = {}
         for key, label in (("single", "Singolo caso"), ("batch", "Multi-caso"),
-                           ("suite", "Suite"), ("geometry", "Geometria")):
+                           ("suite", "Suite"), ("geometry", "Geometria"),
+                           ("settings", "Impostazioni")):
             button = tk.Button(modes, text=label, relief="flat", bd=0,
                                font=(FONT_UI, 10, "bold"), padx=16, pady=8, cursor="hand2",
                                bg=brand.NAVY_PANEL, fg=brand.ICE,
@@ -196,6 +199,7 @@ class LauncherApp:
             "batch": self._build_batch(),
             "suite": self._build_suite(),
             "geometry": self._build_geometry(),
+            "settings": self._build_settings(),
         }
 
         bottom = tk.Frame(self.root, bg=brand.NAVY_DEEP)
@@ -203,6 +207,16 @@ class LauncherApp:
         self.status = tk.Label(bottom, text="Pronto.", bg=brand.NAVY_DEEP, fg=brand.TEXT_MUTED,
                                font=(FONT_UI, 9), anchor="w")
         self.status.pack(side="left")
+        tk.Button(bottom, text="Programma completo", relief="flat", bd=0, padx=14, pady=5,
+                  font=(FONT_UI, 9, "bold"), bg=brand.VIOLET, fg=brand.WHITE,
+                  activebackground=brand.VIOLET_RAMP[2], activeforeground=brand.WHITE,
+                  cursor="hand2", command=self._open_full_program).pack(side="left", padx=(0, 8))
+        self.open_output_button = tk.Button(
+            bottom, text="Apri cartella…", relief="flat", bd=0, padx=14, pady=5,
+            font=(FONT_UI, 9), bg=brand.NAVY_PANEL, fg=brand.ICE,
+            activebackground=brand.VIOLET, activeforeground=brand.WHITE,
+            cursor="hand2", command=self._open_output_folder, state="disabled")
+        self.open_output_button.pack(side="left")
         self.cancel_button = tk.Button(
             bottom, text="Annulla", relief="flat", bd=0, padx=14, pady=5,
             font=(FONT_UI, 9, "bold"), bg=brand.NAVY_PANEL, fg=brand.ICE,
@@ -479,12 +493,112 @@ class LauncherApp:
             self._append("\n" + str(message) + "\n")
         if self.last_output_dir and os.path.isdir(self.last_output_dir):
             self._append("Cartella risultati: %s\n" % self.last_output_dir)
+            try:
+                self.open_output_button.configure(state="normal")
+            except Exception:
+                pass
 
     def _request_cancel(self):
         if not self.busy:
             return
         self.cancel_requested = True
         self.status.configure(text="Annullamento richiesto: mi fermo dopo il caso in corso…")
+
+    # ------------------------------------------------------------ impostazioni
+    def _settings_rows(self):
+        """Elenco (etichetta, valore) della configurazione effettiva, senza Tk."""
+        cfg = self.cfg or {}
+        project = cfg.get("project") or {}
+        refs = cfg.get("reference_values") or {}
+        meta = cfg.get("meta") or {}
+        ai = cfg.get("ai_vision") or {}
+        try:
+            from config_bridge import find_config_path
+
+            config_path = find_config_path() or "(default interni)"
+        except Exception:
+            config_path = "(non disponibile)"
+        try:
+            from meta_driver.launcher import find_meta_executable
+
+            meta_exe = find_meta_executable(meta.get("executable_path", "auto")) or "non trovato"
+        except Exception:
+            meta_exe = meta.get("executable_path") or "auto"
+        api_key = str(ai.get("api_key") or "")
+        masked = ("presente (…%s)" % api_key[-4:]) if len(api_key) > 4 else ("assente" if not api_key else "presente")
+        rows = [
+            ("File di configurazione", config_path),
+            ("Workspace predefinito", project.get("workspace_dir") or "(cartella corrente)"),
+            ("Cartella output", project.get("output_dir") or "./output_diagnostics"),
+            ("Assieme predefinito (config)", project.get("assembly_type") or "auto"),
+            ("Velocità di riferimento",
+             "%s m/s" % refs.get("velocity_inf", refs.get("velocity_inf_ms", 14.0))),
+            ("Densità aria", "%s kg/m³" % refs.get("density_air", 1.225)),
+            ("Passo vettura", "%s m" % refs.get("wheelbase", "n/d")),
+            ("Assi X", "%s / %s m" % (refs.get("front_axle_x") or "n/d",
+                                       refs.get("rear_axle_x") or "n/d")),
+            ("Convenzione forze", refs.get("report_force_convention") or "lift"),
+            ("Eseguibile META", meta_exe),
+            ("AI Vision", "%s · %s" % (ai.get("provider") or "gemini", ai.get("model") or "n/d")),
+            ("Chiave AI", masked),
+        ]
+        try:
+            from config_bridge import thresholds
+
+            asm = project.get("assembly_type") or "auto"
+            t = thresholds(cfg, asm) or {}
+            labels = (("max_acceptable_stall_pct", "Stallo accettabile"),
+                      ("critical_stall_pct", "Stallo critico"))
+            for key, label in labels:
+                if key in t:
+                    rows.append((label, t[key]))
+        except Exception:
+            pass
+        return rows
+
+    def _build_settings(self):
+        card = self._card(self.body, "Configurazione effettiva e accesso al programma completo: "
+                                     "zone manuali, AI Vision, soglie e META si modificano lì.")
+        body = self._inner(card)
+        grid = tk.Frame(body, bg=brand.NAVY_PANEL)
+        grid.pack(fill="x")
+        for index, (label, value) in enumerate(self._settings_rows()):
+            tk.Label(grid, text=label, bg=brand.NAVY_PANEL, fg=brand.TEXT_MUTED,
+                     font=(FONT_UI, 9), anchor="w").grid(row=index, column=0, sticky="w", pady=2)
+            tk.Label(grid, text=str(value), bg=brand.NAVY_PANEL, fg=brand.ICE,
+                     font=(FONT_NUM, 9), anchor="w").grid(row=index, column=1, sticky="w", padx=(16, 0), pady=2)
+        grid.columnconfigure(1, weight=1)
+        tk.Frame(body, bg=brand.NAVY_PANEL, height=8).pack(fill="x")
+        self._GradientButton(body, text="Apri il programma completo", command=self._open_full_program,
+                             width=280, height=42).pack(anchor="w", pady=(6, 2))
+        tk.Label(body, text="La GUI completa mantiene tutte le funzioni di partenza: selezione manuale "
+                            "dei PID, AI Vision, soglie, META, report.",
+                 bg=brand.NAVY_PANEL, fg=brand.TEXT_FAINT, font=(FONT_UI, 8),
+                 anchor="w", justify="left").pack(fill="x", pady=(4, 0))
+        return card
+
+    def _open_full_program(self):
+        command = full_program_command(
+            getattr(sys, "frozen", False), sys.executable,
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        try:
+            kwargs = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+                      "stderr": subprocess.DEVNULL, "close_fds": True}
+            if os.name == "nt":
+                kwargs["creationflags"] = (subprocess.DETACHED_PROCESS
+                                           | subprocess.CREATE_NEW_PROCESS_GROUP)
+            subprocess.Popen(command, **kwargs)
+            self._append("\nProgramma completo avviato: %s\n" % " ".join(command))
+        except OSError as exc:
+            messagebox.showerror("Programma completo", "Non riesco ad avviarlo: %s" % exc, parent=self.root)
+
+    def _open_output_folder(self):
+        folder = self.last_output_dir
+        if folder and os.path.isdir(folder):
+            try:
+                os.startfile(folder)
+            except Exception:
+                self._append("Cartella risultati: %s\n" % folder)
 
     # ---------------------------------------------------------------- worker
     def _start_job(self, name, function):

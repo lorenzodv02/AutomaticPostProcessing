@@ -59,7 +59,7 @@ def test_launcher_window_builds_with_brand(monkey=None):
         return
     try:
         assert app.root.title().startswith("FS")
-        assert set(app.frames) == {"single", "batch", "suite", "geometry"}
+        assert set(app.frames) == {"single", "batch", "suite", "geometry", "settings"}
         app._show_mode("batch")
         assert app.mode == "batch"
         # la modalità attiva è gialla, le altre navy
@@ -74,3 +74,29 @@ def test_launcher_window_builds_with_brand(monkey=None):
         except Exception:
             pass
         raise
+
+
+def test_settings_rows_show_config_and_ai():
+    if gui_launcher is None:
+        return
+    cfg = {"project": {"assembly_type": "full_car", "workspace_dir": "C:/casi"},
+           "reference_values": {"velocity_inf_ms": 14.0, "density_air": 1.225,
+                                "front_axle_x": 0.8, "rear_axle_x": 2.4,
+                                "report_force_convention": "lift"},
+           "meta": {"executable_path": "auto"},
+           "ai_vision": {"provider": "gemini", "model": "gemini-2.5-flash",
+                         "api_key": "chiave-segreta-1234"}}
+    app = gui_launcher.LauncherApp.__new__(gui_launcher.LauncherApp)
+    app.cfg = cfg
+    rows = dict(app._settings_rows())
+    assert rows["Assieme predefinito (config)"] == "full_car"
+    assert rows["Velocità di riferimento"] in ("14.0 m/s", "14 m/s")
+    assert rows["AI Vision"].startswith("gemini")
+    assert "1234" in rows["Chiave AI"] and "chiave-segreta" not in rows["Chiave AI"]
+
+
+def test_full_program_command():
+    from meta_driver.entry_modes import full_program_command
+    assert full_program_command(True, "C:/app.exe", "C:/repo") == ["C:/app.exe", "--gui"]
+    command = full_program_command(False, "python", "C:/repo")
+    assert command[0] == "python" and command[-1] == "--gui" and "main.py" in command[1]

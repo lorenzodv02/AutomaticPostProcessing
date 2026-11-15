@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.23.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.24.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.23.0
+python main.py --version      # FS-MetaPostDiag 1.24.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,15 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.24.0 — Le funzioni del programma di partenza restano raggiungibili
+
+Il launcher è l'ingresso predefinito, ma **non sostituisce** la GUI completa: la apre, e ne mostra la configurazione.
+
+- **Pulsante "Programma completo"** nel launcher e nella scheda Impostazioni (processo separato, staccato) → la GUI di partenza con tutte le funzioni: selezione manuale dei PID, AI Vision, soglie, META, report, ispezione zone.
+- **Nuova scheda "Impostazioni"**: file di configurazione usato, workspace, cartella output, assieme predefinito, velocità e densità di riferimento, passo, convenzione forze, eseguibile META, provider/modello AI e presenza della chiave (mascherata), soglie dell'assieme.
+- **"Apri cartella…"** per i risultati dell'ultimo lavoro (singolo caso, batch, suite).
+- La scheda Impostazioni dichiara esplicitamente che per modificare i valori e usare le zone manuali si passa al programma completo.
 
 ### v1.23.0 — Basta "tutto undertray": assieme auto e selettore nel launcher
 
