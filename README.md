@@ -4,6 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -64,6 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
+python main.py --version      # FS-MetaPostDiag 1.0.0
 ```
 
 Le librerie richieste sono:
@@ -234,7 +236,9 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 
 ## 📝 Changelog
 
-### Rifattorizzazione "configurazione viva" + test
+### v1.0.0 — configurazione viva, bbox corretto, test e CI
+
+Prima release versionata del progetto (il commit iniziale non aveva un tag). Verifica la versione con `python main.py --version`.
 
 - **Nuovo `config_bridge.py`**: unica sorgente di default e risoluzione della configurazione.
 - **`config.yaml` finalmente efficace**: keyword PID, stazioni di taglio, soglie, `cp_range` e `reference_area` sono ora letti dal codice; prima erano ignorati.

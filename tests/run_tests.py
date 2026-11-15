@@ -19,6 +19,7 @@ MODULES = (
     "tests.test_config_bridge",
     "tests.test_parser_synthetic",
     "tests.test_rules_thresholds",
+    "tests.test_version",
 )
 
 

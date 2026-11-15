@@ -30,6 +30,7 @@ from analyzer.assembly_rules import evaluate_design_issues
 from analyzer.ai_vision_advisor import generate_ai_vision_commentary
 from reporting.report_builder import build_diagnostic_reports
 from config_bridge import merge_config
+from version import __version__
 
 
 def load_config(config_path: str = None) -> dict:
@@ -141,6 +142,12 @@ def main():
         help="Tipo di assieme aerodinamico (default: undertray)"
     )
     parser.add_argument("--config", "-c", type=str, default=None, help="Percorso al file config.yaml")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="FS-MetaPostDiag %s" % __version__,
+        help="Mostra la versione del programma ed esce",
+    )
     parser.add_argument("--meta-exe", type=str, default=None, help="Percorso all'eseguibile meta_post64.bat / meta_post.exe")
     parser.add_argument(
         "--no-meta-batch",
