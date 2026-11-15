@@ -1,60 +1,59 @@
-Aero Suite — geometria, tabelle, report
-======================================
+Aero Suite — un processo, un report
+===================================
 
-Un solo comando per: estrarre la geometria del fondo dalla mesh del `.cas`,
-costruire le tabelle, generare Aero Design Explorer e Aero Recombination Engine,
-e una pagina indice che collega tutto.
+Un solo comando che porta dal `.cas` al progetto: estrae la geometria del fondo
+dalla mesh, costruisce le tabelle e genera **un unico report brandizzato**
+(`Aero_Suite.html`) con cinque sezioni:
+
+    01 Panoramica      KPI, mappa deportanza/resistenza, tabella dei casi
+    02 Confronto zone  differenza per zona tra due casi qualsiasi
+    03 Sintesi         vettura ricomposta zona per zona + tre pacchetti da simulare
+    04 Geometria       profili del fondo dalla mesh, misure, correlazioni
+    05 Metodo          catena dei passaggi e limiti
 
 Cosa serve
 ----------
-    suite\
-        00_Aero_Suite.bat
-        aero_suite.py
-        FS-MetaPostDiag.exe      <- mettilo qui (o indica il percorso)
-    tools\
-        design_explorer.py
-        recombination.py
-        explorer_template.html
-        recombination_template.html
-    _dati_batch\                 <- la cartella prodotta dal batch
-        dataset.csv, dataset_pid.csv, *.json, escludi.txt
+    Aero-Suite\
+        suite\   (00_Aero_Suite.bat, aero_suite.py, brand_theme.py, suite_template.html, LEGGIMI)
+        tools\   (design_explorer.py, recombination.py e i loro template)
+        assets\  (font Roboto, monogramma UC, wordmark: identità del team)
+        FS-MetaPostDiag.exe    <- mettilo qui o nella cartella superiore
 
-Python 3.8+ (solo libreria standard: nessuna installazione di pacchetti).
+Python 3.8+ (solo libreria standard). META Post non serve.
 
 Uso
 ---
-1. Doppio clic su `00_Aero_Suite.bat`, trascina la cartella `_dati_batch`.
-2. Il bat fa tre passi:
-   - **geometria**: per ogni caso lancia `FS-MetaPostDiag.exe --geometry-only`
-     e salva `geom\<caso>.json` nella cartella dati;
-   - **tabelle**: produce `dataset_geom.csv` (profilo, altezza minima, angolo
-     del tratto in salita, espansione, aree) e le correlazioni geometria/forze;
-   - **report**: genera `Aero_Design_Explorer.html`, `Aero_Recombination.html`
-     e `Aero_Suite.html` con i profili in scala comune.
-3. Si apre `Aero_Suite.html`.
+1. Doppio clic su `suite\00_Aero_Suite.bat`, trascina la cartella `_dati_batch`.
+2. Il bat fa tre passi e apre il report:
+   - geometria: per ogni caso lancia `FS-MetaPostDiag.exe --geometry-only`
+     e salva `geom\<caso>.json` (salta i casi già fatti, `--force` per rifarli);
+   - tabelle: `dataset_geom.csv` con geometria + forze e le correlazioni;
+   - dashboard: `Aero_Suite.html`.
 
 Da riga di comando:
 
     python aero_suite.py --data "D:\Analisi\_dati_batch" --exe .\FS-MetaPostDiag.exe
     python aero_suite.py --data "..." --stage geometry --force
     python aero_suite.py --data "..." --stage tables
-    python aero_suite.py --data "..." --stage reports --tools ..\tools
+    python aero_suite.py --data "..." --stage dashboard
 
 Cosa esce
 ---------
-    geom\<caso>.json      profilo del fondo, zone, metriche (dalla mesh)
+    geom\<caso>.json      geometria dalla mesh (profilo, minimo, salita, espansione, aree)
     dataset_geom.csv      una riga per caso con geometria + forze
-    Aero_Suite.html       pagina indice: report, profili, tabella, correlazioni
-    Aero_Design_Explorer.html
-    Aero_Recombination.html
+    Aero_Suite.html       il report unico, brandizzato UniNa Corse
 
 Note
 ----
-- La geometria si legge **solo dal .cas**: nessuna tabella da compilare.
-- Il profilo è la superficie più bassa a ogni X: se una zona ha anche pareti
-  laterali o un labbro posteriore, il profilo ne risente. Per questo il report
-  riporta anche la "ladder" delle zone con estensione in X, Y e area.
-- Il "tratto in salita" viene classificato: oltre 35° è un gradino/cascata e non
-  un diffusore.
-- Le correlazioni con 15-20 casi servono a scegliere la prossima simulazione,
-  non a dimostrare una legge.
+- L'identità di squadra è applicata dal vivo: palette ufficiale
+  (navy #11255C, viola #5B2581, giallo #FDEB19, azzurro #D8EEFC), Roboto e
+  Roboto Condensed inclusi come @font-face, monogramma UC e wordmark negli
+  header/footer. Se la cartella `assets` manca, il report resta leggibile con
+  i font di sistema.
+- Il profilo è la superficie più bassa a ogni X: se una zona ha pareti laterali
+  o un labbro posteriore basso, il profilo ne risente. La ladder delle zone in
+  `dataset_geom.csv` è il dato più robusto.
+- Il "tratto in salita" è classificato: oltre 35° è un gradino/cascata, non un
+  diffusore.
+- La sintesi per zona presuppone additività: le interazioni non sono nei dati.
+  Ogni pacchetto porta il suo piano di prova.

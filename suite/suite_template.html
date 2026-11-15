@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aero Suite — UniNa Corse</title>
+<style>
+__FONT_FACES__
+__BRAND_VARS__
+  * { box-sizing: border-box; }
+  body { margin: 0; background:
+           radial-gradient(1100px 520px at 12% -10%, rgba(91,37,129,0.35), transparent 60%),
+           radial-gradient(900px 500px at 95% 0%, rgba(22,48,121,0.55), transparent 55%),
+           var(--navy-deep);
+         color: var(--text); font-family: var(--font-ui); line-height: 1.5;
+         padding: 26px 30px 54px; }
+  .wrap { max-width: 1260px; margin: 0 auto; }
+  .brand-head { margin-bottom: 18px; }
+  .brand-row { display: flex; align-items: center; gap: 18px; }
+  .monogram { width: 54px; height: 54px; object-fit: contain; }
+  .kicker { color: var(--gold); font-size: 10.5px; letter-spacing: .2em; text-transform: uppercase; font-weight: 700; }
+  h1 { margin: 2px 0 2px; font-family: var(--font-ui); font-weight: 900; font-size: 34px; letter-spacing: -0.4px; }
+  h1 span { color: var(--gold); }
+  p.sub { margin: 0; color: var(--muted); font-size: 13.5px; max-width: 820px; }
+  .stripe { margin-left: auto; display: flex; gap: 5px; }
+  .bar { display: block; width: 9px; height: 30px; border-radius: 3px; transform: skewX(-16deg); }
+  .bar-0 { background: var(--gold); } .bar-1 { background: var(--violet-soft); } .bar-2 { background: var(--ice); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip { background: var(--navy-panel); border: 1px solid var(--border-soft); border-radius: 999px;
+          padding: 5px 12px; font-size: 12px; color: var(--muted); }
+  .chip b { color: var(--text); font-family: var(--font-data); }
+  .tabs { display: flex; gap: 6px; margin: 6px 0 16px; flex-wrap: wrap; }
+  .tab { background: transparent; border: 1px solid transparent; color: var(--muted);
+         font-family: var(--font-ui); font-size: 13px; padding: 8px 14px; border-radius: 10px; cursor: pointer; }
+  .tab:hover { color: var(--text); background: rgba(22,48,121,0.45); }
+  .tab.active { background: var(--navy-panel); color: var(--text); border-color: var(--gold); }
+  .tab .n { color: var(--gold); font-family: var(--font-data); margin-right: 6px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--navy-panel); border-radius: 18px; padding: 18px 20px; margin-bottom: 16px;
+          box-shadow: 0 10px 30px rgba(4,12,32,0.35); }
+  .card h2 { margin: 0 0 4px; font-size: 17px; font-weight: 700; }
+  .card h2 .accent { display: inline-block; width: 4px; height: 16px; border-radius: 2px;
+                     background: var(--gold); margin-right: 9px; vertical-align: -2px; }
+  .card p.hint { margin: 2px 0 14px; color: var(--muted); font-size: 12.5px; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat { background: var(--navy); border-radius: 14px; padding: 13px 15px; }
+  .stat .label { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+  .stat .value { font-family: var(--font-data); font-size: 24px; font-weight: 700; margin-top: 2px; }
+  .stat .unit { font-size: 12px; color: var(--muted); margin-left: 3px; }
+  .stat .note { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .gold { color: var(--gold); } .ice { color: var(--ice); } .good { color: #4ADE80; } .warn { color: var(--danger); }
+  .violet { color: var(--violet-soft); }
+  svg text { fill: var(--muted); font-size: 10.5px; font-family: var(--font-data); }
+  svg .grid { stroke: rgba(216,238,252,0.08); stroke-width: 1; }
+  svg .point { cursor: pointer; }
+  svg .label { fill: var(--ice); font-size: 10px; }
+  svg .pareto { fill: none; stroke: var(--gold); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { padding: 6px 7px; text-align: right; border-bottom: 1px solid rgba(216,238,252,0.08); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
+  th:hover { color: var(--gold); }
+  .mono { font-family: var(--font-data); }
+  .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  select { background: var(--input); color: var(--text); border: 1px solid var(--border-soft);
+           border-radius: 9px; padding: 7px 10px; font-size: 12.5px; min-width: 200px; font-family: var(--font-ui); }
+  .bars { display: flex; flex-direction: column; gap: 5px; }
+  .bar-row { display: grid; grid-template-columns: 170px 1fr 86px; gap: 10px; align-items: center; font-size: 12px; }
+  .bar-name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-track { position: relative; height: 13px; background: rgba(216,238,252,0.06); border-radius: 4px; }
+  .bar-mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: rgba(216,238,252,0.2); }
+  .bar-fill { position: absolute; top: 0; height: 100%; border-radius: 4px; }
+  .bar-fill.pos { left: 50%; background: linear-gradient(90deg, rgba(74,222,128,0.45), #4ADE80); }
+  .bar-fill.neg { right: 50%; background: linear-gradient(90deg, var(--danger), rgba(228,35,32,0.45)); }
+  .bar-val { text-align: right; font-family: var(--font-data); }
+  .packages { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .package { background: var(--navy); border-radius: 14px; padding: 14px; cursor: pointer; border: 1px solid transparent; }
+  .package:hover { border-color: var(--border); }
+  .package.sel { border-color: var(--gold); }
+  .package h3 { margin: 0 0 4px; font-size: 14px; }
+  .package .big { font-family: var(--font-data); font-size: 24px; font-weight: 700; color: #4ADE80; }
+  .package .small { font-size: 11px; color: var(--muted); }
+  .verdict { border-left: 3px solid var(--gold); background: rgba(253,235,25,0.07);
+             padding: 9px 13px; border-radius: 0 9px 9px 0; font-size: 12px; margin-top: 12px; }
+  .verdict.bad { border-left-color: var(--danger); background: rgba(228,35,32,0.08); }
+  .verdict.good { border-left-color: #4ADE80; background: rgba(74,222,128,0.08); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  ul.list { margin: 6px 0 0; padding: 0; list-style: none; }
+  ul.list li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0;
+               border-bottom: 1px dashed rgba(216,238,252,0.1); font-size: 12px; }
+  ul.list li span:last-child { font-family: var(--font-data); }
+  .brand-foot { display: flex; align-items: center; gap: 14px; color: var(--muted);
+                font-size: 11px; margin-top: 20px; padding-top: 12px;
+                border-top: 1px solid var(--border-soft); }
+  .wordmark { height: 22px; object-fit: contain; }
+  .empty { color: var(--muted); font-size: 12.5px; }
+  @media (max-width: 1000px) { .kpis { grid-template-columns: repeat(2,1fr); } .packages { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } .bar-row { grid-template-columns: 110px 1fr 74px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+__HEADER__
+<div class="tabs">
+  <button class="tab active" data-tab="overview"><span class="n">01</span>Panoramica</button>
+  <button class="tab" data-tab="zones"><span class="n">02</span>Confronto zone</button>
+  <button class="tab" data-tab="synthesis"><span class="n">03</span>Sintesi</button>
+  <button class="tab" data-tab="geometry"><span class="n">04</span>Geometria</button>
+  <button class="tab" data-tab="method"><span class="n">05</span>Metodo</button>
+</div>
+
+<section class="panel active" id="panel-overview">
+  <div class="card"><div class="kpis" id="kpis"></div></div>
+  <div class="card">
+    <h2><span class="accent"></span>Mappa dei modelli</h2>
+    <p class="hint">Deportanza contro resistenza: in basso a destra si vince. La linea gialla è la frontiera di Pareto.</p>
+    <div id="scatter"></div>
+    <div class="legend">
+      <span><i style="background:var(--ice)"></i>RW1 + diffusore completo</span>
+      <span><i style="background:var(--violet-soft)"></i>Box D4 + diffusore solo centrale</span>
+      <span><i style="background:var(--gold)"></i>frontiera di Pareto</span>
+    </div>
+  </div>
+  <div class="card">
+    <h2><span class="accent"></span>Tutti i casi</h2>
+    <p class="hint">Intestazioni cliccabili. Clicca una riga per usarla nel confronto per zona.</p>
+    <div id="table"></div>
+  </div>
+</section>
+
+<section class="panel" id="panel-zones">
+  <div class="card">
+    <h2><span class="accent"></span>Dove si guadagna e dove si perde</h2>
+    <p class="hint">Differenza di deportanza per zona tra due casi. Verde = guadagno, rosso = perdita.</p>
+    <div class="controls">
+      <label>Caso A <select id="sel-a"></select></label>
+      <label>Caso B <select id="sel-b"></select></label>
+      <span class="chip" id="pair-total"></span>
+    </div>
+    <div class="bars" id="bars"></div>
+    <p class="hint" id="zones-note" style="margin-top:10px;"></p>
+  </div>
+</section>
+
+<section class="panel" id="panel-synthesis">
+  <div class="card">
+    <h2><span class="accent"></span>La vettura che i dati dicono di costruire</h2>
+    <p class="hint" id="reco-sub"></p>
+    <div class="kpis" id="reco-kpis"></div>
+    <div class="verdict" id="reco-verdict"></div>
+  </div>
+  <div class="card">
+    <h2><span class="accent"></span>I donatori</h2>
+    <p class="hint">Per ogni zona: da quale configurazione conviene prenderla e quanto vale. Le zone sotto
+       3σ del rumore sono scartate.</p>
+    <div id="reco-table"></div>
+  </div>
+  <div class="card">
+    <h2><span class="accent"></span>Le tre proposte</h2>
+    <p class="hint">Pacchetti incrementali da simulare. Clicca per il piano di prova.</p>
+    <div class="packages" id="packages"></div>
+    <div id="package-detail"></div>
+  </div>
+</section>
+
+<section class="panel" id="panel-geometry">
+  <div class="card">
+    <h2><span class="accent"></span>Geometria del fondo, dalla mesh</h2>
+    <p class="hint">Superficie più bassa lungo X, scala comune. In etichetta altezza minima e angolo del tratto in salita.</p>
+    <div id="profiles"></div>
+    <p class="hint" id="geom-note" style="margin-top:8px;"></p>
+  </div>
+  <div class="card">
+    <h2><span class="accent"></span>Misure e prestazioni</h2>
+    <div id="geom-table"></div>
+  </div>
+  <div class="card">
+    <h2><span class="accent"></span>Correlazioni</h2>
+    <p class="hint">Pearson fra metrica geometrica e prestazione. Con pochi casi serve a scegliere la prossima prova.</p>
+    <div id="geom-corr"></div>
+  </div>
+</section>
+
+<section class="panel" id="panel-method">
+  <div class="card">
+    <h2><span class="accent"></span>Come nascono questi numeri</h2>
+    <div class="two">
+      <div>
+        <h3 style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:0 0 6px;">Catena</h3>
+        <ul class="list" id="chain"></ul>
+      </div>
+      <div>
+        <h3 style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:0 0 6px;">Limiti</h3>
+        <div class="verdict bad" id="limits"></div>
+        <div class="verdict good" id="next-step" style="margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+__FOOTER__
+</div>
+
+<script>window.__SUITE__ = __PAYLOAD__;</script>
+<script>
+(function () {
+  var D = window.__SUITE__;
+  var fmt1 = function (v) { return (v === null || v === undefined) ? "n/d" : Number(v).toFixed(1); };
+  var fmt2 = function (v) { return (v === null || v === undefined) ? "n/d" : Number(v).toFixed(2); };
+  var byId = function (id) { for (var i = 0; i < D.cases.length; i++) if (D.cases[i].id === id) return D.cases[i]; return null; };
+  var zonesOf = function (id) { return D.zones[id] || {}; };
+
+  // ------------------------------------------------------------------ tabs
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (tab) {
+    tab.addEventListener("click", function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) { t.classList.remove("active"); });
+      Array.prototype.forEach.call(document.querySelectorAll(".panel"), function (p) { p.classList.remove("active"); });
+      tab.classList.add("active");
+      document.getElementById("panel-" + tab.getAttribute("data-tab")).classList.add("active");
+    });
+  });
+
+  // ------------------------------------------------------------------ KPI
+  var best = D.cases.slice().sort(function (a, b) { return b.dep - a.dep; })[0];
+  var bestLd = D.cases.slice().sort(function (a, b) { return b.ld - a.ld; })[0];
+  var modelVerdict = D.model && D.model.available ? D.model.verdict : null;
+  var cards = [
+    { label: "Migliore deportanza", value: best ? fmt1(best.dep) : "n/d", unit: "N", note: best ? best.id + " · iter " + best.iter : "", cls: "gold" },
+    { label: "Miglior efficienza", value: bestLd ? fmt2(bestLd.ld) : "n/d", unit: "", note: bestLd ? bestLd.id + " · " + fmt1(bestLd.dep) + "/" + fmt1(bestLd.drag) + " N" : "", cls: "ice" },
+    { label: "Ripetibilità", value: "±" + fmt1(D.noise_n), unit: "N", note: "run doppie dello stesso modello", cls: "violet" },
+    { label: "Casi · geometrie", value: D.counts.cases + " · " + D.counts.geom, unit: "", note: "dataset · mesh lette", cls: "" }
+  ];
+  document.getElementById("kpis").innerHTML = cards.map(function (c) {
+    return '<div class="stat"><div class="label">' + c.label + '</div><div class="value ' + c.cls + '">' +
+      c.value + '<span class="unit">' + c.unit + '</span></div><div class="note">' + c.note + '</div></div>';
+  }).join("");
+
+  // --------------------------------------------------------------- scatter
+  var selA = D.cases[0] ? D.cases[0].id : null;
+  var selB = D.cases[1] ? D.cases[1].id : selA;
+  function wingColor(wing) {
+    if (wing === "RW1") return "#D8EEFC";
+    if (wing === "Box D4") return "#A094C5";
+    return "#7E94B4";
+  }
+  function paretoIds() {
+    return D.cases.filter(function (c) {
+      return !D.cases.some(function (o) {
+        return o !== c && o.dep >= c.dep && o.drag <= c.drag && (o.dep > c.dep || o.drag < c.drag);
+      });
+    }).map(function (c) { return c.id; });
+  }
+  function renderScatter() {
+    var width = 1140, height = 380, pad = { l: 58, r: 18, t: 14, b: 40 };
+    var deps = D.cases.map(function (c) { return c.dep; });
+    var drags = D.cases.map(function (c) { return c.drag; });
+    var minX = Math.min.apply(null, deps) - 15, maxX = Math.max.apply(null, deps) + 15;
+    var minY = Math.min.apply(null, drags) - 10, maxY = Math.max.apply(null, drags) + 10;
+    function sx(v) { return pad.l + (v - minX) / (maxX - minX) * (width - pad.l - pad.r); }
+    function sy(v) { return height - pad.b - (v - minY) / (maxY - minY) * (height - pad.t - pad.b); }
+    var svg = ['<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%">'];
+    for (var i = 0; i <= 5; i++) {
+      var xv = minX + (maxX - minX) * i / 5;
+      svg.push('<line class="grid" x1="' + sx(xv) + '" y1="' + pad.t + '" x2="' + sx(xv) + '" y2="' + (height - pad.b) + '"/>');
+      svg.push('<text x="' + sx(xv) + '" y="' + (height - pad.b + 15) + '" text-anchor="middle">' + xv.toFixed(0) + '</text>');
+    }
+    for (var j = 0; j <= 4; j++) {
+      var yv = minY + (maxY - minY) * j / 4;
+      svg.push('<line class="grid" x1="' + pad.l + '" y1="' + sy(yv) + '" x2="' + (width - pad.r) + '" y2="' + sy(yv) + '"/>');
+      svg.push('<text x="' + (pad.l - 8) + '" y="' + (sy(yv) + 4) + '" text-anchor="end">' + yv.toFixed(0) + '</text>');
+    }
+    svg.push('<text x="' + (width / 2) + '" y="' + (height - 4) + '" text-anchor="middle">Deportanza [N]</text>');
+    svg.push('<text x="12" y="' + (height / 2) + '" text-anchor="middle" transform="rotate(-90 12 ' + (height / 2) + ')">Resistenza [N]</text>');
+    var front = paretoIds();
+    var ordered = D.cases.filter(function (c) { return front.indexOf(c.id) >= 0; })
+      .sort(function (a, b) { return b.dep - a.dep; });
+    if (ordered.length > 1) {
+      svg.push('<path class="pareto" d="' + ordered.map(function (c, k) {
+        return (k ? 'L' : 'M') + sx(c.dep) + ' ' + sy(c.drag);
+      }).join(' ') + '"/>');
+    }
+    var placed = [];
+    function canPlace(x, y) {
+      for (var k = 0; k < placed.length; k++) if (Math.abs(placed[k][0] - x) < 52 && Math.abs(placed[k][1] - y) < 13) return false;
+      placed.push([x, y]); return true;
+    }
+    D.cases.forEach(function (c) {
+      var selected = c.id === selA;
+      svg.push('<circle class="point" data-id="' + c.id + '" cx="' + sx(c.dep) + '" cy="' + sy(c.drag) +
+        '" r="' + (selected ? 7 : 5) + '" fill="' + wingColor(c.wing) + '" stroke="' + (selected ? "#FDEB19" : "rgba(4,12,32,0.6)") +
+        '" stroke-width="' + (selected ? 2.5 : 1) + '"><title>' + c.id + ' — ' + fmt1(c.dep) + ' N / ' + fmt1(c.drag) + ' N — L/D ' + fmt2(c.ld) + '</title></circle>');
+      var lx = sx(c.dep) + 9, ly = sy(c.drag) - 8;
+      if ((front.indexOf(c.id) >= 0 || selected) && canPlace(lx, ly)) {
+        svg.push('<text class="label" x="' + lx + '" y="' + ly + '">' + c.id + '</text>');
+      }
+    });
+    svg.push("</svg>");
+    var wrap = document.getElementById("scatter");
+    wrap.innerHTML = svg.join("");
+    Array.prototype.forEach.call(wrap.querySelectorAll("circle.point"), function (node) {
+      node.addEventListener("click", function () {
+        selA = node.getAttribute("data-id");
+        syncSelects(); renderScatter(); renderZones(); renderTable();
+      });
+    });
+  }
+
+  // ----------------------------------------------------------------- table
+  var sortKey = "dep", sortDir = -1;
+  function renderTable() {
+    var rows = D.cases.slice().sort(function (a, b) {
+      var va = a[sortKey], vb = b[sortKey];
+      if (typeof va === "string") return String(va).localeCompare(String(vb)) * sortDir;
+      return ((va || 0) - (vb || 0)) * sortDir;
+    });
+    var head = [["id", "caso"], ["dep", "deportanza N"], ["drag", "resistenza N"], ["ld", "L/D"],
+                ["cop", "CoP %"], ["iter", "iter"], ["wing", "ala post"], ["diff", "diffusore"]];
+    var html = ["<table><thead><tr>"];
+    head.forEach(function (item) { html.push('<th data-key="' + item[0] + '">' + item[1] + '</th>'); });
+    html.push("</tr></thead><tbody>");
+    rows.forEach(function (c) {
+      html.push('<tr data-id="' + c.id + '"' + (c.id === selA ? ' style="background:rgba(253,235,25,0.07)"' : '') +
+        '><td>' + c.id + '</td><td class="mono">' + fmt1(c.dep) + '</td><td class="mono">' + fmt1(c.drag) +
+        '</td><td class="mono good">' + fmt2(c.ld) + '</td><td class="mono">' + fmt1(c.cop) + '</td><td class="mono">' +
+        (c.iter || "-") + '</td><td>' + (c.wing || "n/d") + '</td><td>' + (c.diff || "n/d") + '</td></tr>');
+    });
+    html.push("</tbody></table>");
+    var wrap = document.getElementById("table");
+    wrap.innerHTML = html.join("");
+    Array.prototype.forEach.call(wrap.querySelectorAll("th"), function (th) {
+      th.addEventListener("click", function () {
+        var key = th.getAttribute("data-key");
+        if (key === sortKey) sortDir = -sortDir; else { sortKey = key; sortDir = -1; }
+        renderTable();
+      });
+    });
+    Array.prototype.forEach.call(wrap.querySelectorAll("tbody tr"), function (tr) {
+      tr.addEventListener("click", function () {
+        selA = tr.getAttribute("data-id"); syncSelects(); renderScatter(); renderZones(); renderTable();
+      });
+    });
+  }
+
+  // ----------------------------------------------------------------- zones
+  function fillSelect(select, current) {
+    select.innerHTML = D.cases.map(function (c) {
+      return '<option value="' + c.id + '"' + (c.id === current ? " selected" : "") + '>' + c.id + ' · ' + fmt1(c.dep) + ' N</option>';
+    }).join("");
+  }
+  function syncSelects() {
+    fillSelect(document.getElementById("sel-a"), selA);
+    fillSelect(document.getElementById("sel-b"), selB);
+  }
+  function renderZones() {
+    var za = zonesOf(selA), zb = zonesOf(selB), names = {}, rows = [];
+    Object.keys(za).forEach(function (n) { names[n] = true; });
+    Object.keys(zb).forEach(function (n) { names[n] = true; });
+    Object.keys(names).forEach(function (name) {
+      var a = (name in za) ? za[name] : null, b = (name in zb) ? zb[name] : null;
+      rows.push({ zone: name, a: a, b: b, delta: (b === null ? 0 : b) - (a === null ? 0 : a) });
+    });
+    rows.sort(function (x, y) { return Math.abs(y.delta) - Math.abs(x.delta); });
+    var ca = byId(selA), cb = byId(selB);
+    var common = rows.filter(function (r) { return r.a !== null && r.b !== null; });
+    var onlyA = rows.filter(function (r) { return r.a !== null && r.b === null; });
+    var onlyB = rows.filter(function (r) { return r.a === null && r.b !== null; });
+    document.getElementById("pair-total").textContent = "Δ totale " + ((cb.dep - ca.dep) >= 0 ? "+" : "") + (cb.dep - ca.dep).toFixed(1) + " N · zone comuni " + common.length;
+    var maxAbs = Math.max.apply(null, rows.map(function (r) { return Math.abs(r.delta); }).concat([0.1]));
+    var shown = rows.filter(function (r) { return Math.abs(r.delta) >= 0.05; }).slice(0, 16);
+    document.getElementById("bars").innerHTML = shown.map(function (r) {
+      var width = Math.abs(r.delta) / maxAbs * 50;
+      var cls = r.delta >= 0 ? "pos" : "neg";
+      var missing = r.a === null ? " (solo B)" : (r.b === null ? " (solo A)" : "");
+      return '<div class="bar-row"><div class="bar-name" title="' + r.zone + '">' + r.zone + missing +
+        '</div><div class="bar-track"><div class="bar-mid"></div><div class="bar-fill ' + cls + '" style="width:' + width + '%"></div></div>' +
+        '<div class="bar-val ' + cls + '">' + (r.delta >= 0 ? "+" : "") + r.delta.toFixed(1) + '</div></div>';
+    }).join("") || '<p class="empty">Nessuna differenza sopra 0,05 N.</p>';
+    var note = "Zone presenti in entrambi: " + common.length + " (Δ " + (common.reduce(function (s, r) { return s + r.delta; }, 0)).toFixed(1) + " N)";
+    if (onlyA.length || onlyB.length) {
+      note += " · solo in A: " + onlyA.length + " · solo in B: " + onlyB.length + ". Nomi diversi possono indicare la stessa parte.";
+    }
+    document.getElementById("zones-note").textContent = note;
+  }
+  document.getElementById("sel-a").addEventListener("change", function (e) { selA = e.target.value; renderScatter(); renderZones(); renderTable(); });
+  document.getElementById("sel-b").addEventListener("change", function (e) { selB = e.target.value; renderZones(); });
+
+  // -------------------------------------------------------------- synthesis
+  function renderSynthesis() {
+    var S = D.synthesis;
+    var sub = document.getElementById("reco-sub");
+    if (!S || !S.available) {
+      sub.textContent = "Sintesi non disponibile: " + ((S && S.reason) || "dati insufficienti") + ".";
+      document.getElementById("reco-kpis").innerHTML = "";
+      document.getElementById("reco-table").innerHTML = "";
+      document.getElementById("packages").innerHTML = "";
+      return;
+    }
+    sub.textContent = "Gruppo " + S.group.wing + " + " + S.group.diff + ", riferimento " + S.baseline +
+      ". Ogni zona presa dalla configurazione che la produce meglio, con filtro 3σ sul rumore.";
+    var t = S.totals;
+    var cards = [
+      { label: "Riferimento", value: fmt1(t.base_dep), unit: "N", note: S.baseline + " · " + fmt1(t.base_drag) + " N" },
+      { label: "Sintesi", value: fmt1(t.synth_dep), unit: "N", note: fmt1(t.synth_drag) + " N drag" },
+      { label: "Guadagno", value: "+" + fmt1(t.gain_dep), unit: "N", note: t.zones + " zone affidabili" },
+      { label: "L/D sintetico", value: fmt2(t.ld), unit: "", note: "riferimento " + fmt2(t.base_dep / t.base_drag) }
+    ];
+    document.getElementById("reco-kpis").innerHTML = cards.map(function (c) {
+      return '<div class="stat"><div class="label">' + c.label + '</div><div class="value ice">' + c.value +
+        '<span class="unit">' + c.unit + '</span></div><div class="note">' + c.note + '</div></div>';
+    }).join("");
+    var verdict = document.getElementById("reco-verdict");
+    verdict.className = "verdict good";
+    verdict.textContent = "La somma dei guadagni presuppone che le zone si sommino: è un limite superiore, " +
+      "non una previsione. Le gomme sono escluse (artefatti della parete rotante).";
+
+    var rows = S.rows.filter(function (r) { return r.reliable && !r.excluded_family; });
+    document.getElementById("reco-table").innerHTML = '<table><thead><tr><th>zona</th><th>famiglia</th><th>da</th>' +
+      '<th>guadagno N</th><th>Δ drag N</th><th>rumore N</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr><td>' + r.zone + '</td><td>' + r.family + '</td><td class="mono">' + r.donor +
+          '</td><td class="mono good">+' + r.gain.toFixed(1) + '</td><td class="mono">' +
+          (r.drag_delta >= 0 ? "+" : "") + r.drag_delta.toFixed(1) + '</td><td class="mono">' + r.zone_noise.toFixed(2) + '</td></tr>';
+      }).join("") + '</tbody></table>';
+
+    var selected = S.proposals.length ? S.proposals[0].name : null;
+    function renderPackages() {
+      document.getElementById("packages").innerHTML = S.proposals.map(function (p) {
+        return '<div class="package' + (p.name === selected ? ' sel' : '') + '" data-name="' + p.name + '">' +
+          '<h3>' + p.name + '</h3><div class="big">+' + p.gain.toFixed(1) + ' <span class="small">N</span></div>' +
+          '<div class="small">drag ' + (p.delta_drag >= 0 ? "+" : "") + p.delta_drag.toFixed(1) + ' N · ' +
+          p.zones + ' zone · ' + p.interfaces + ' interfacce</div></div>';
+      }).join("");
+      Array.prototype.forEach.call(document.querySelectorAll(".package"), function (node) {
+        node.addEventListener("click", function () { selected = node.getAttribute("data-name"); renderPackages(); renderDetail(); });
+      });
+      renderDetail();
+    }
+    function renderDetail() {
+      var p = S.proposals.filter(function (x) { return x.name === selected; })[0];
+      if (!p) return;
+      var donors = {};
+      p.items.forEach(function (item) { (donors[item.donor] = donors[item.donor] || []).push(item.zone); });
+      var plan = Object.keys(donors).map(function (d) { return d + ": " + donors[d].join(", "); }).join(" — ");
+      document.getElementById("package-detail").innerHTML = '<div class="verdict">Piano di prova: parti da ' +
+        S.baseline + ' e cambia solo ' + plan + '. Atteso: +' + p.gain.toFixed(1) + ' N, drag ' +
+        (p.delta_drag >= 0 ? "+" : "") + p.delta_drag.toFixed(1) + ' N. Interfacce da raccordare: ' + p.interfaces + '.</div>';
+    }
+    renderPackages();
+  }
+
+  // -------------------------------------------------------------- geometry
+  function renderGeometry() {
+    var G = D.geometry;
+    var box = document.getElementById("profiles");
+    if (!G || !G.available) {
+      box.innerHTML = '<p class="empty">Nessun profilo disponibile: esegui lo stadio geometria della suite (legge i .cas).</p>';
+      document.getElementById("geom-note").textContent = "";
+      document.getElementById("geom-table").innerHTML = "";
+      document.getElementById("geom-corr").innerHTML = "";
+      return;
+    }
+    var profiles = G.profiles;
+    var xs = [], hs = [];
+    profiles.forEach(function (p) { xs = xs.concat(p.x); hs = hs.concat(p.h); });
+    var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
+    var ymax = Math.max.apply(null, hs) * 1000 || 1;
+    var columns = 4, cellW = 1160 / columns, rows = Math.ceil(profiles.length / columns), cellH = 150;
+    var svg = ['<svg viewBox="0 0 1160 ' + (rows * cellH + 6) + '" width="100%">'];
+    profiles.forEach(function (p, index) {
+      var ox = (index % columns) * cellW + 18, oy = Math.floor(index / columns) * cellH + 12;
+      var iw = cellW - 36, ih = cellH - 46;
+      var points = p.x.map(function (x, k) {
+        return (ox + (x - xmin) / Math.max(xmax - xmin, 1e-9) * iw) + "," + (oy + ih - (p.h[k] * 1000 / ymax) * ih);
+      }).join(" ");
+      svg.push('<polyline fill="none" stroke="#D8EEFC" stroke-width="1.5" points="' + points + '"/>');
+      svg.push('<text x="' + ox + '" y="' + (oy + ih + 14) + '">' + p.case + '</text>');
+      svg.push('<text x="' + (ox + iw) + '" y="' + (oy + ih + 14) + '" text-anchor="end">min ' +
+        (p.summary.throat_h_m * 1000).toFixed(0) + ' mm' +
+        (p.summary.rise_angle_deg !== null ? ' · ' + p.summary.rise_angle_deg.toFixed(0) + '°' : '') + '</text>');
+    });
+    svg.push("</svg>");
+    box.innerHTML = svg.join("");
+    document.getElementById("geom-note").textContent =
+      "Profilo = superficie più bassa a ogni X. Se una zona ha pareti laterali o un labbro posteriore basso, " +
+      "il profilo ne risente: la ladder delle zone (in dataset_geom.csv) è il dato più robusto.";
+    var rowsHtml = G.rows.map(function (r) {
+      return '<tr><td>' + r.case_id + '</td><td class="mono">' + fmt1(r.dep) + '</td><td class="mono">' +
+        (r.throat_mm === null ? "n/d" : r.throat_mm.toFixed(1)) + '</td><td class="mono">' +
+        (r.rise_angle === null ? "n/d" : r.rise_angle.toFixed(1)) + '</td><td class="mono">' +
+        (r.expansion === null ? "n/d" : r.expansion.toFixed(2)) + '</td><td class="mono">' +
+        (r.floor_area === null ? "n/d" : r.floor_area.toFixed(2)) + '</td><td>' + (r.kind || "n/d") + '</td></tr>';
+    }).join("");
+    document.getElementById("geom-table").innerHTML = '<table><thead><tr><th>caso</th><th>dep N</th>' +
+      '<th>altezza minima mm</th><th>angolo salita deg</th><th>espansione</th><th>area fondo m²</th>' +
+      '<th>salita</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>';
+    document.getElementById("geom-corr").innerHTML = (G.correlations.length ? '<table><thead><tr><th>prestazione</th>' +
+      '<th>metrica</th><th>r</th><th>n</th></tr></thead><tbody>' + G.correlations.map(function (item) {
+        return '<tr><td>' + item.target + '</td><td>' + item.metric + '</td><td class="mono">' +
+          (item.r >= 0 ? "+" : "") + item.r.toFixed(2) + '</td><td class="mono">' + item.n + '</td></tr>';
+      }).join("") + '</tbody></table>' : '<p class="empty">Servono almeno 4 casi con geometria.</p>');
+  }
+
+  // ---------------------------------------------------------------- method
+  document.getElementById("chain").innerHTML = [
+    ["Lettura .cas/.dat", "mesh, pressioni, sforzi (mmap, senza Fluent)"],
+    ["Forze per PID", "pressione + viscosa con il segno di Fluent"],
+    ["Geometria dalla mesh", "profili, altezza minima, salita, espansione"],
+    ["Tabelle", "dataset.csv, dataset_pid.csv, dataset_geom.csv"],
+    ["Explorer + Sintesi", "Pareto, zone, donatori, proposte"],
+    ["Verifiche", "CHK-01..07, plausibilità, 3σ sul rumore"]
+  ].map(function (item) { return '<li><span>' + item[0] + '</span><span>' + item[1] + '</span></li>'; }).join("");
+  document.getElementById("limits").textContent =
+    "Con 15-20 casi una correlazione o un modello servono a scegliere la prossima prova, non a dimostrare una legge. " +
+    "La sintesi per zona presuppone additività: le interazioni fra componenti non sono nei dati, per questo ogni " +
+    "pacchetto porta un piano di prova.";
+  document.getElementById("next-step").textContent = modelVerdict ||
+    "Estrai la geometria dei casi (stadio 1): con i profili, le misure del fondo diventano le variabili del modello.";
+
+  // ------------------------------------------------------------------ boot
+  syncSelects(); renderScatter(); renderTable(); renderZones(); renderSynthesis(); renderGeometry();
+})();
+</script>
+</body>
+</html>

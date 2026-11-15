@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================
-rem  Aero Suite - geometria dalla mesh + tabelle + report
+rem  Aero Suite - un processo, un report
 rem  Trascina su questo file la cartella _dati_batch, oppure avvialo
 rem  e incolla il percorso.
 rem ============================================================
@@ -49,14 +49,14 @@ echo.
 %PY% aero_suite.py --data "%DATA%" --exe "%EXE%" --tools "..\tools" --stage all
 if errorlevel 3 goto partial
 echo.
-echo Apro la pagina indice...
+echo Apro l'Aero Suite...
 start "" "%DATA%\Aero_Suite.html"
 pause
 exit /b 0
 
 :partial
 echo.
-echo Alcuni casi non hanno prodotto la geometria: leggi le righe sopra.
+echo Alcuni casi non hanno prodotto la geometria (vedi sopra). La suite si apre comunque.
 start "" "%DATA%\Aero_Suite.html"
 pause
 exit /b 3

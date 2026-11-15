@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.14.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.15.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.14.0
+python main.py --version      # FS-MetaPostDiag 1.15.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,15 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.15.0 — Aero Suite: un processo, un report, brand di squadra
+
+La suite non produce più tre HTML separati: **un solo processo e un solo report brandizzato**.
+
+- **Un comando**: `00_Aero_Suite.bat` → geometria dalla mesh → tabelle → `Aero_Suite.html`. Nessuno stadio da lanciare a mano.
+- **Un report**: cinque schede in un file — panoramica (KPI, mappa deportanza/resistenza, tabella), confronto zone, sintesi (donatori, tre pacchetti, piano di prova), geometria (profili, misure, correlazioni), metodo.
+- **Brand identity**: palette ufficiale (`#11255C`, `#5B2581`, `#FDEB19`, `#D8EEFC`), Roboto e Roboto Condensed incorporati come `@font-face` in base64, monogramma UC nell'header e wordmark nel footer, barre oblique giallo/viola/azzurro.
+- Il dashboard è autonomo (nessuna CDN, nessun server) e funziona anche senza `assets`: in quel caso usa i font di sistema.
 
 ### v1.14.0 — Aero Suite e geometria dalla mesh
 

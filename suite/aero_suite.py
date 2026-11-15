@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Aero Suite — un solo comando per: geometria dalla mesh, tabelle, Explorer,
-Recombination e una pagina indice che collega tutto.
+Aero Suite — un processo, un report.
 
 Stadi:
-    geometry   estrae la geometria del fondo da ogni .cas (usa FS-MetaPostDiag --geometry-only)
-    tables     costruisce dataset_geom.csv e calcola le correlazioni geometria-prestazioni
-    reports    genera Aero_Design_Explorer.html, Aero_Recombination.html e Aero_Suite.html
+    geometry   estrae la geometria del fondo da ogni .cas (FS-MetaPostDiag --geometry-only)
+    tables     costruisce dataset_geom.csv e le correlazioni geometria-prestazioni
+    dashboard  genera UN SOLO file brandizzato: Aero_Suite.html
+               (panoramica, confronto zone, sintesi, geometria, metodo)
 
 Solo libreria standard. Uso:
     python aero_suite.py --data "D:\\Analisi\\_dati_batch"
@@ -19,7 +19,6 @@ import csv
 import json
 import math
 import os
-import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -28,6 +27,27 @@ EXCLUSIONS_FILE = "escludi.txt"
 GEOM_DIR = "geom"
 SUITE_HTML = "Aero_Suite.html"
 GEOM_CSV = "dataset_geom.csv"
+TEMPLATE_NAME = "suite_template.html"
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _tools_dir(tools_dir=None) -> str:
+    if tools_dir:
+        return os.path.abspath(tools_dir)
+    for candidate in (os.path.join(HERE, "..", "tools"), os.path.join(HERE, "tools")):
+        if os.path.isdir(candidate):
+            return os.path.abspath(candidate)
+    return os.path.abspath(os.path.join(HERE, "..", "tools"))
+
+
+def _import_tools(tools_dir):
+    path = _tools_dir(tools_dir)
+    if path not in sys.path:
+        sys.path.insert(0, path)
+    import design_explorer  # noqa: WPS433
+    import recombination  # noqa: WPS433
+    return design_explorer, recombination
 
 
 # --------------------------------------------------------------------------- dati
@@ -63,10 +83,13 @@ def load_cases(data_dir):
             "dep": to_float(row.get("deportanza_N")),
             "drag": to_float(row.get("drag_N")),
             "ld": to_float(row.get("L_D")),
+            "cop": to_float(row.get("cop_x_pct")),
+            "iter": row.get("iterazioni") or "",
             "wing": row.get("ala_post") or "",
             "diff": row.get("diffusore") or "",
             "cas_file": row.get("cas_file") or "",
         })
+    cases.sort(key=lambda c: -(c["dep"] or 0))
     return cases
 
 
@@ -90,7 +113,6 @@ def case_directory(data_dir, case):
 
 # ---------------------------------------------------------------------- stadi
 def stage_geometry(data_dir, exe, cases_root=None, force=False, timeout=900):
-    """Estrae la geometria del fondo per ogni caso con l'eseguibile."""
     cases = load_cases(data_dir)
     geom_dir = os.path.join(data_dir, GEOM_DIR)
     os.makedirs(geom_dir, exist_ok=True)
@@ -109,10 +131,10 @@ def stage_geometry(data_dir, exe, cases_root=None, force=False, timeout=900):
             print("  %-24s cartella del caso non trovata (usa --cases-root)" % case["id"])
             failed += 1
             continue
-        command = [exe, "--geometry-only", "-w", directory]
         try:
-            result = subprocess.run(command, capture_output=True, text=True,
-                                    errors="replace", timeout=timeout)
+            result = subprocess.run([exe, "--geometry-only", "-w", directory],
+                                    capture_output=True, text=True, errors="replace",
+                                    timeout=timeout)
             output = (result.stdout or "") + (result.stderr or "")
         except (OSError, subprocess.TimeoutExpired) as exc:
             print("  %-24s errore: %s" % (case["id"], exc))
@@ -121,7 +143,7 @@ def stage_geometry(data_dir, exe, cases_root=None, force=False, timeout=900):
         produced = os.path.join(directory, "output_diagnostics", "geometry.json")
         if not os.path.isfile(produced):
             print("  %-24s nessuna geometria prodotta" % case["id"])
-            for line in output.splitlines()[-4:]:
+            for line in output.splitlines()[-3:]:
                 print("        " + line.strip())
             failed += 1
             continue
@@ -184,35 +206,29 @@ def load_geometries(data_dir, cases):
             payload = json.load(open(path, encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        geometry = payload.get("geometry") or {}
-        summary = payload.get("summary") or {}
-        out[case["id"]] = {"payload": payload, "geometry": geometry, "summary": summary}
+        out[case["id"]] = {"payload": payload,
+                           "geometry": payload.get("geometry") or {},
+                           "summary": payload.get("summary") or {}}
     return out
 
 
-def stage_tables(data_dir, quiet=False):
-    cases = load_cases(data_dir)
-    geometries = load_geometries(data_dir, cases)
-    header = ["case_id", "dep_N", "drag_N", "L_D", "wing", "diff"] + \
-             [name for _key, name, _unit, _scale in GEOM_METRICS]
-    rows = []
+def geometry_tables(cases, geometries):
+    rows, correlations = [], []
     for case in cases:
         entry = geometries.get(case["id"])
         if not entry:
             continue
-        row = {"case_id": case["id"], "dep_N": case["dep"], "drag_N": case["drag"],
-               "L_D": case["ld"], "wing": case["wing"], "diff": case["diff"]}
-        for key, name, _unit, scale in GEOM_METRICS:
-            value = entry["summary"].get(key)
-            row[name] = round(value * scale, 2) if isinstance(value, (int, float)) else ""
-        rows.append(row)
-    path = os.path.join(data_dir, GEOM_CSV)
-    with open(path, "w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=header, delimiter=";")
-        writer.writeheader()
-        writer.writerows(rows)
-
-    correlations = []
+        summary = entry["summary"]
+        rows.append({
+            "case_id": case["id"], "dep": case["dep"], "drag": case["drag"], "ld": case["ld"],
+            "throat_mm": (summary.get("throat_h_m") or 0.0) * 1000.0 if summary.get("throat_h_m") is not None else None,
+            "rise_angle": summary.get("rise_angle_deg"),
+            "rise_length": summary.get("rise_length_m"),
+            "expansion": summary.get("expansion_ratio"),
+            "floor_area": summary.get("floor_area_m2"),
+            "plan_area": summary.get("plan_area_m2"),
+            "kind": summary.get("rise_kind"),
+        })
     for target, label in (("dep", "deportanza"), ("drag", "resistenza"), ("ld", "L/D")):
         for key, name, _unit, _scale in GEOM_METRICS:
             xs = [geometries[c["id"]]["summary"].get(key) for c in cases if c["id"] in geometries]
@@ -222,224 +238,180 @@ def stage_tables(data_dir, quiet=False):
                 correlations.append({"target": label, "metric": name,
                                      "r": round(value, 2), "n": len(xs)})
     correlations.sort(key=lambda item: -abs(item["r"]))
-    if not quiet:
-        print("tabelle: %d casi con geometria -> %s" % (len(rows), os.path.basename(path)))
-        for item in correlations[:5]:
-            print("  %-16s vs %-20s r = %+.2f (n=%d)"
-                  % (item["target"], item["metric"], item["r"], item["n"]))
     return rows, correlations
 
 
-# --------------------------------------------------------------------- pagina
-def svg_profiles(geometries, cases, width=1180, height=240, columns=4):
-    available = [c["id"] for c in cases if c["id"] in geometries]
-    if not available:
-        return "<p class='note'>Nessuna geometria disponibile: esegui lo stadio geometry.</p>"
-    xs_all, hs_all = [], []
-    for case_id in available:
-        geometry = geometries[case_id]["geometry"]
-        xs_all.extend(geometry.get("x_m") or [])
-        hs_all.extend(geometry.get("h_min_m") or [])
-    if not xs_all:
-        return "<p class='note'>Profili non disponibili.</p>"
-    xmin, xmax = min(xs_all), max(xs_all)
-    ymax = max(hs_all) * 1000.0 or 1.0
-    rows = int(math.ceil(len(available) / float(columns)))
-    cell_w = width / float(columns)
-    cell_h = height / float(max(rows, 1))
-    pad = 18
-    parts = ['<svg viewBox="0 0 %d %d" width="100%%">' % (width, cell_h * rows + 10)]
-    for index, case_id in enumerate(available):
-        geometry = geometries[case_id]["geometry"]
-        xs = geometry.get("x_m") or []
-        hs = geometry.get("h_min_m") or []
-        if len(xs) < 2:
-            continue
-        col = index % columns
-        row = index // columns
-        ox = col * cell_w + pad
-        oy = row * cell_h + pad
-        inner_w = cell_w - 2 * pad
-        inner_h = cell_h - 2 * pad - 14
-        points = []
-        for x, h in zip(xs, hs):
-            px = ox + (x - xmin) / max(xmax - xmin, 1e-9) * inner_w
-            py = oy + inner_h - (h * 1000.0 / ymax) * inner_h
-            points.append("%.1f,%.1f" % (px, py))
-        summary = geometries[case_id]["summary"]
-        minimum = (summary.get("throat_h_m") or 0.0) * 1000.0
-        angle = summary.get("rise_angle_deg")
-        parts.append('<polyline fill="none" stroke="#38bdf8" stroke-width="1.6" points="%s"/>'
-                     % " ".join(points))
-        parts.append('<text x="%.1f" y="%.1f" fill="#8fa8b8" font-family="monospace" '
-                     'font-size="10">%s</text>' % (ox, oy + inner_h + 13, case_id))
-        parts.append('<text x="%.1f" y="%.1f" fill="#e8f1f7" font-family="monospace" '
-                     'font-size="10" text-anchor="end">min %.0f mm%s</text>'
-                     % (ox + inner_w, oy + inner_h + 13, minimum,
-                        (" · %+.0f°" % angle) if isinstance(angle, (int, float)) else ""))
-    parts.append("</svg>")
-    return "".join(parts)
-
-
-def render_suite_html(data_dir, cases, geometries, rows, correlations):
-    best = max((c for c in cases if c["dep"] is not None), key=lambda c: c["dep"], default=None)
-    best_ld = max((c for c in cases if c["ld"] is not None), key=lambda c: c["ld"], default=None)
-    counts = {"cases": len(cases), "geom": len(geometries)}
-    cards = [
-        ("Casi nel dataset", str(counts["cases"]), "dopo esclusioni"),
-        ("Con geometria", str(counts["geom"]), "dalla mesh del .cas"),
-        ("Migliore deportanza", ("%s · %.1f N" % (best["id"], best["dep"])) if best else "n/d", ""),
-        ("Miglior L/D", ("%s · %.2f" % (best_ld["id"], best_ld["ld"])) if best_ld else "n/d", ""),
-    ]
-    card_html = "".join(
-        '<div class="card"><div class="label">%s</div><div class="value">%s</div>'
-        '<div class="note">%s</div></div>' % item for item in cards)
-
-    corr_rows = "".join(
-        "<tr><td>%s</td><td>%s</td><td class='mono'>%+.2f</td><td class='mono'>%d</td></tr>"
-        % (item["target"], item["metric"], item["r"], item["n"]) for item in correlations)
-
-    metric_head = "".join("<th>%s</th>" % name for _key, name, _unit, _scale in GEOM_METRICS)
-    metric_rows = ""
-    for row in rows:
-        cells = "".join("<td class='mono'>%s</td>" % (row.get(name, "") if row.get(name) != "" else "n/d")
-                        for _key, name, _unit, _scale in GEOM_METRICS)
-        metric_rows += ("<tr><td>%s</td><td class='mono'>%.1f</td>%s</tr>"
-                        % (row["case_id"], row["dep_N"] or 0.0, cells))
-
-    links = []
-    for name, title, note in (
-        ("Aero_Design_Explorer.html", "Aero Design Explorer", "mappa, tabella, confronto per zona, modello leave-one-out"),
-        ("Aero_Recombination.html", "Aero Recombination Engine", "vettura sintetica zona per zona, con piano di prova"),
-    ):
-        if os.path.isfile(os.path.join(data_dir, name)):
-            links.append('<a class="link" href="%s"><b>%s</b><span>%s</span></a>'
-                         % (name, title, note))
-
-    return """<!DOCTYPE html>
-<html lang="it"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Aero Suite — UniNa Corse</title>
-<style>
- body { margin:0; background:#07131f; color:#e8f1f7;
-        font-family:"Segoe UI",system-ui,-apple-system,sans-serif; padding:26px 30px 50px; }
- header, main, footer { max-width:1240px; margin:0 auto; }
- .kicker { color:#fdeb19; font-size:11px; letter-spacing:.22em; text-transform:uppercase; font-weight:700; }
- h1 { font-size:32px; margin:6px 0 4px; }
- h1 span { color:#fdeb19; }
- p.sub { color:#8fa8b8; font-size:13.5px; max-width:860px; }
- .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:18px 0; }
- .card { background:#0d2133; border:1px solid rgba(255,255,255,.09); border-radius:13px; padding:13px 15px; }
- .card .label { font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:#8fa8b8; }
- .card .value { font-family:"Cascadia Mono",Consolas,monospace; font-size:20px; font-weight:700; margin-top:3px; }
- .card .note { font-size:11px; color:#8fa8b8; }
- section { background:#0d2133; border:1px solid rgba(255,255,255,.09); border-radius:15px;
-           padding:18px 20px; margin-bottom:16px; }
- section h2 { margin:0 0 4px; font-size:17px; }
- section h2 span { color:#fdeb19; font-family:monospace; margin-right:8px; }
- section p.note { margin:2px 0 12px; color:#8fa8b8; font-size:12.5px; }
- table { width:100%%; border-collapse:collapse; font-size:12px; }
- th, td { padding:6px 7px; text-align:right; border-bottom:1px solid rgba(255,255,255,.06); }
- th:first-child, td:first-child { text-align:left; }
- th { color:#8fa8b8; font-size:10px; letter-spacing:.06em; text-transform:uppercase; }
- .mono { font-family:"Cascadia Mono",Consolas,monospace; }
- .links { display:flex; gap:12px; flex-wrap:wrap; }
- .link { flex:1; min-width:240px; text-decoration:none; color:#e8f1f7; background:#10283d;
-         border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:13px 15px; }
- .link:hover { border-color:#fdeb19; }
- .link b { display:block; font-size:14px; margin-bottom:3px; }
- .link span { color:#8fa8b8; font-size:11.5px; }
- .warn { border-left:3px solid #fdeb19; background:rgba(253,235,25,.06); padding:9px 13px;
-         border-radius:0 9px 9px 0; font-size:12px; margin-top:12px; }
- footer { color:#8fa8b8; font-size:11px; margin-top:16px; }
- @media (max-width:900px) { .cards { grid-template-columns:repeat(2,1fr); } }
-</style></head><body>
-<header>
- <div class="kicker">UniNa Corse · Aerodynamics &amp; Cooling</div>
- <h1>Aero <span>Suite</span></h1>
- <p class="sub">Post-processing, geometria dalla mesh, Explorer e Recombination Engine in un unico giro.
-    Il profilo del fondo viene letto dai triangoli del <code>.cas</code>: nessuna misura manuale,
-    nessuna tabella da compilare.</p>
-</header>
-<main>
- <div class="cards">%CARD%</div>
-
- <section>
-  <h2><span>01</span>Report</h2>
-  <p class="note">Apri i due report interattivi generati dallo stesso dataset.</p>
-  <div class="links">%LINKS%</div>
- </section>
-
- <section>
-  <h2><span>02</span>Profili del fondo, dalla mesh</h2>
-  <p class="note">Altezza della superficie più bassa lungo X, scala comune. In etichetta l'altezza
-     minima e l'angolo del tratto in salita.</p>
-  %SVG%
- </section>
-
- <section>
-  <h2><span>03</span>Geometria e prestazioni</h2>
-  <p class="note">Misure derivate dal mesh per ogni caso. Le zone del fondo vengono riconosciute per nome
-     (flat_floor, diffusore, venturi).</p>
-  <table><thead><tr><th>caso</th><th>dep N</th>%HEAD%</tr></thead><tbody>%ROWS%</tbody></table>
- </section>
-
- <section>
-  <h2><span>04</span>Correlazioni (con cautela)</h2>
-  <p class="note">Coefficiente di Pearson fra metrica geometrica e prestazione, su tutti i casi con
-     geometria disponibile.</p>
-  <table><thead><tr><th>prestazione</th><th>metrica</th><th>r</th><th>n</th></tr></thead>
-  <tbody>%CORR%</tbody></table>
-  <div class="warn">Con 15-20 casi una correlazione serve a scegliere la prossima simulazione, non a
-     dimostrare una legge. Se |r| è alto, la metrica merita una prova controllata: un caso che cambia
-     solo quella geometria.</div>
- </section>
-</main>
-<footer>Generato il %DATE% · Aero Suite · dati: .cas/.dat reali elaborati da FS-MetaPostDiag</footer>
-</body></html>""".replace("%CARD%", card_html).replace("%LINKS%", "".join(links) or
-                                                   "<p class='note'>Report non ancora generati.</p>") \
-                        .replace("%SVG%", svg_profiles(geometries, cases)) \
-                        .replace("%HEAD%", metric_head).replace("%ROWS%", metric_rows or "<tr><td colspan='9'>nessun dato</td></tr>") \
-                        .replace("%CORR%", corr_rows or "<tr><td colspan='4'>nessun dato</td></tr>") \
-                        .replace("%DATE%", datetime.now().strftime("%Y-%m-%d %H:%M"))
-
-
-def stage_reports(data_dir, tools_dir):
-    outputs = []
-    for script in ("design_explorer.py", "recombination.py"):
-        path = os.path.join(tools_dir, script)
-        if not os.path.isfile(path):
-            print("  %s non trovato in %s" % (script, tools_dir))
-            continue
-        try:
-            result = subprocess.run([sys.executable, path, "--data", data_dir],
-                                    capture_output=True, text=True, errors="replace")
-        except OSError as exc:
-            print("  %s: %s" % (script, exc))
-            continue
-        tail = [line for line in (result.stdout or "").splitlines() if line.strip()][-3:]
-        for line in tail:
-            print("  " + line.strip())
-        if result.returncode != 0:
-            print("  %s ha restituito %d" % (script, result.returncode))
-        outputs.append(script)
+def stage_tables(data_dir):
     cases = load_cases(data_dir)
     geometries = load_geometries(data_dir, cases)
-    rows, correlations = stage_tables(data_dir, quiet=True)
-    html = render_suite_html(data_dir, cases, geometries, rows, correlations)
+    rows, correlations = geometry_tables(cases, geometries)
+    header = ["case_id", "dep_N", "drag_N", "L_D", "wing", "diff"] + \
+             [name for _key, name, _unit, _scale in GEOM_METRICS]
+    out_rows = []
+    for row in rows:
+        case = next((c for c in cases if c["id"] == row["case_id"]), {})
+        item = {"case_id": row["case_id"], "dep_N": row["dep"], "drag_N": row["drag"],
+                "L_D": row["ld"], "wing": case.get("wing", ""), "diff": case.get("diff", "")}
+        for key, name, _unit, scale in GEOM_METRICS:
+            value = geometries[row["case_id"]]["summary"].get(key)
+            item[name] = round(value * scale, 2) if isinstance(value, (int, float)) else ""
+        out_rows.append(item)
+    path = os.path.join(data_dir, GEOM_CSV)
+    with open(path, "w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=header, delimiter=";")
+        writer.writeheader()
+        writer.writerows(out_rows)
+    print("tabelle: %d casi con geometria -> %s" % (len(out_rows), os.path.basename(path)))
+    for item in correlations[:5]:
+        print("  %-16s vs %-20s r = %+.2f (n=%d)"
+              % (item["target"], item["metric"], item["r"], item["n"]))
+    return rows, correlations
+
+
+# ------------------------------------------------------------------- payload
+def _noise_from_duplicates(cases):
+    """Rumore: differenza fra casi con lo stesso .cas (run doppie)."""
+    by_file = {}
+    for case in cases:
+        key = (case.get("cas_file") or "").lower()
+        if key:
+            by_file.setdefault(key, []).append(case)
+    deltas = []
+    for group in by_file.values():
+        if len(group) >= 2:
+            deltas.append(abs((group[1]["dep"] or 0.0) - (group[0]["dep"] or 0.0)))
+    return round(sum(deltas) / len(deltas), 2) if deltas else 1.0, len(deltas)
+
+
+def _model_verdict(model, noise):
+    if not model.get("available"):
+        return "Modello non disponibile: %s." % (model.get("reason") or "dati insufficienti")
+    result = model["targets"]["dep"]
+    ratio = result["rmse"] / max(noise, 1e-9)
+    if ratio < 3:
+        return "Errore leave-one-out %.1f N (%.1f× il rumore): il modello sa prevedere la deportanza." % (
+            result["rmse"], ratio)
+    if ratio < 10:
+        return "Errore leave-one-out %.1f N (%.1f× il rumore): prevede la tendenza, non il singolo caso." % (
+            result["rmse"], ratio)
+    return ("Errore leave-one-out %.1f N (%.0f× il rumore): i dati sostengono il confronto, "
+            "non la previsione. La prossima prova deve riempire i vuoti." % (result["rmse"], ratio))
+
+
+def build_dashboard_payload(data_dir, tools_dir=None):
+    """Un payload unico: casi, zone, modello, sintesi, geometria."""
+    dx, reco = _import_tools(tools_dir)
+    explorer = dx.build_payload(data_dir)
+    raw_cases = explorer["cases"]
+    noise = explorer.get("noise_n", 1.0)
+    model = explorer.get("model") or {"available": False, "reason": "modello assente"}
+    proposals = explorer.get("proposals") or []
+    coverage = explorer.get("coverage") or {}
+    try:
+        synthesis = reco.build_payload(data_dir)
+        synthesis["available"] = bool(synthesis.get("rows"))
+        if not synthesis["available"]:
+            synthesis["reason"] = "nessuna zona con un donatore migliore"
+    except (SystemExit, Exception) as exc:  # noqa: BLE001
+        synthesis = {"available": False, "reason": str(exc) or "dati insufficienti"}
+
+    geometries = load_geometries(data_dir, load_cases(data_dir))
+    geom_rows, correlations = geometry_tables(
+        [{"id": c["id"], "dep": c["dep"], "drag": c["drag"], "ld": c["ld"]} for c in raw_cases],
+        geometries)
+    profiles = []
+    for case in raw_cases:
+        entry = geometries.get(case["id"])
+        if not entry:
+            continue
+        geometry = entry["geometry"]
+        if not geometry.get("available") or not geometry.get("x_m"):
+            continue
+        profiles.append({"case": case["id"], "x": geometry.get("x_m"),
+                         "h": geometry.get("h_min_m"), "summary": entry["summary"]})
+    geometry_block = {"available": bool(profiles), "profiles": profiles,
+                      "rows": geom_rows, "correlations": correlations}
+    cases = [{"id": c["id"], "dep": c["dep"], "drag": c["drag"], "ld": c["ld"],
+              "cop": c.get("cop"), "iter": c.get("iter") or "", "wing": c.get("wing") or "",
+              "diff": c.get("diff") or ""} for c in raw_cases]
+    best = max((c for c in raw_cases if c["dep"] is not None), key=lambda c: c["dep"], default=None)
+    best_ld = max((c for c in raw_cases if c["ld"] is not None), key=lambda c: c["ld"], default=None)
+    return {
+        "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "noise_n": noise,
+        "excluded": explorer.get("excluded") or sorted(load_exclusions(data_dir)),
+        "counts": {"cases": len(cases), "geom": len(profiles),
+                   "zones": len({zone for mapping in explorer.get("zones", {}).values()
+                                 for zone in mapping})},
+        "cases": cases,
+        "zones": explorer.get("zones") or {},
+        "kpis": {"best_dep": {"id": best["id"], "dep": best["dep"]} if best else None,
+                 "best_ld": {"id": best_ld["id"], "ld": best_ld["ld"]} if best_ld else None},
+        "model": {"available": model.get("available", False),
+                  "reason": model.get("reason"),
+                  "targets": model.get("targets", {}),
+                  "coefficients": model.get("coefficients", []),
+                  "verdict": _model_verdict(model, noise)},
+        "proposals": proposals,
+        "coverage": coverage,
+        "synthesis": synthesis,
+        "geometry": geometry_block,
+    }
+
+
+def render_dashboard(payload, template_path, brand=None):
+    """Inserisce brand e dati nel template unico del dashboard."""
+    if brand is None:
+        import brand_theme as brand  # noqa: WPS433
+    template = open(template_path, "r", encoding="utf-8").read()
+    chips = [
+        ("casi", payload["counts"]["cases"]),
+        ("geometrie", payload["counts"]["geom"]),
+        ("rumore", "±%.2f N" % payload["noise_n"]),
+    ]
+    if payload["kpis"]["best_dep"]:
+        chips.append(("migliore", "%s · %.1f N" % (payload["kpis"]["best_dep"]["id"],
+                                                   payload["kpis"]["best_dep"]["dep"])))
+    header = brand.header_html(
+        title='Aero Suite',
+        subtitle=("Dal .cas al progetto in un processo: forze per zona, geometria del fondo dalla mesh, "
+                  "confronto e sintesi della vettura. Un solo report, sempre lo stesso."),
+        chips=chips,
+    )
+    footer = brand.footer_html(payload["generated"])
+    data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    html = template
+    for token, value in (("__FONT_FACES__", brand.font_faces()),
+                         ("__BRAND_VARS__", brand.css_vars()),
+                         ("__HEADER__", header),
+                         ("__FOOTER__", footer),
+                         ("__PAYLOAD__", data)):
+        html = html.replace(token, value)
+    return html
+
+
+def stage_dashboard(data_dir, tools_dir=None):
+    if not os.path.isfile(os.path.join(data_dir, "dataset.csv")):
+        print("ERRORE: dataset.csv assente nella cartella dati.")
+        return None
+    payload = build_dashboard_payload(data_dir, tools_dir)
+    template = os.path.join(HERE, TEMPLATE_NAME)
+    html = render_dashboard(payload, template)
     path = os.path.join(data_dir, SUITE_HTML)
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(html)
-    print("pagina indice: %s (%.1f KB)" % (path, os.path.getsize(path) / 1024.0))
+    print("dashboard: %s (%.1f KB) · casi %d · geometrie %d"
+          % (path, os.path.getsize(path) / 1024.0,
+             payload["counts"]["cases"], payload["counts"]["geom"]))
     return path
 
 
 # ------------------------------------------------------------------------ CLI
 def main():
-    parser = argparse.ArgumentParser(description="Aero Suite: geometria, tabelle, report.")
+    parser = argparse.ArgumentParser(description="Aero Suite: un processo, un report.")
     parser.add_argument("--data", required=True, help="cartella _dati_batch")
     parser.add_argument("--stage", default="all",
-                        choices=["geometry", "tables", "reports", "all"])
+                        choices=["geometry", "tables", "dashboard", "all"])
     parser.add_argument("--exe", default=None, help="FS-MetaPostDiag.exe per la geometria")
     parser.add_argument("--cases-root", default=None,
                         help="cartella con le sottocartelle dei casi (se i percorsi salvati non esistono)")
@@ -451,12 +423,11 @@ def main():
     if not os.path.isdir(data_dir):
         print("ERRORE: cartella non trovata: %s" % data_dir)
         return 2
-    here = os.path.dirname(os.path.abspath(__file__))
-    exe = os.path.abspath(args.exe) if args.exe else os.path.join(here, "FS-MetaPostDiag.exe")
-    tools_dir = os.path.abspath(args.tools) if args.tools else os.path.abspath(
-        os.path.join(here, "..", "tools"))
-    if not os.path.isdir(os.path.join(data_dir, "..")) and False:
-        pass
+    exe = os.path.abspath(args.exe) if args.exe else os.path.join(HERE, "FS-MetaPostDiag.exe")
+    if not os.path.isfile(exe):
+        parent = os.path.join(os.path.dirname(HERE), "FS-MetaPostDiag.exe")
+        if os.path.isfile(parent):
+            exe = parent
 
     print("Aero Suite — dati: %s" % data_dir)
     failures = 0
@@ -471,9 +442,9 @@ def main():
     if args.stage in ("tables", "all"):
         print("\n[2/3] tabelle")
         stage_tables(data_dir)
-    if args.stage in ("reports", "all"):
-        print("\n[3/3] report")
-        stage_reports(data_dir, tools_dir)
+    if args.stage in ("dashboard", "all"):
+        print("\n[3/3] dashboard")
+        stage_dashboard(data_dir, args.tools)
     print("\nFatto. Apri: %s" % os.path.join(data_dir, SUITE_HTML))
     return 0 if failures == 0 else 3
 
