@@ -1089,9 +1089,15 @@ def extract_real_mesh_and_cfd_data(
         pid_fy_visc = float(np.sum(f_visc_y)) if np.max(np.abs(f_visc_y)) > 1e-10 else 0.0
         pid_fz = float(np.sum(fz_p))
 
-        # Drag totale del PID = Drag di Pressione + Drag Viscosa (esattamente come in ANSYS Fluent)
-        pid_drag_press = abs(pid_fx_press)
-        pid_drag_visc = abs(pid_fx_visc)
+        # Drag totale del PID = Pressione + Viscosa **con il segno**, esattamente come
+        # il report "Forces" di Fluent lungo +X. Due dettagli verificati sul caso FW5
+        # confrontando i componenti con il report Fluent:
+        #  - il nostro integrale di pressione ha segno opposto a Fluent (+12,59 vs -12,59)
+        #    perche' le normali sono orientate fluido -> parete, quindi si nega;
+        #  - NON usare abs(): una zona che genera spinta (il pneumatico in rotazione)
+        #    deve contribuire in negativo, e sommare i moduli gonfia il totale (+2,3%).
+        pid_drag_press = -pid_fx_press
+        pid_drag_visc = pid_fx_visc
         pid_drag_total = pid_drag_press + pid_drag_visc
 
         # Risultante verticale del PID = Pressione + Viscosa, **proiettata su +Y**
@@ -1099,8 +1105,11 @@ def extract_real_mesh_and_cfd_data(
         # Per la componente viscosa, lo sforzo viscoso verticale oppone il flusso.
         # `pid_df_*` tiene il segno fisico (lift); `force_sign` applica poi la
         # convenzione scelta per la presentazione (lift o downforce).
+        # Verificato contro il report Fluent (direzione 0 -1 0): la componente di
+        # PRESSIONE coincide (54,29 = 54,29 su front_main), mentre la VISCOSA va presa
+        # con il segno di `pid_fy_visc` (Fluent: -0,02 su chassis; con il "-" davamo +0,02).
         pid_df_press = pid_fy_press
-        pid_df_visc = -pid_fy_visc
+        pid_df_visc = pid_fy_visc
         pid_df_total = pid_df_press + pid_df_visc
 
         lift_1x = pid_df_total

@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.9.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.9.1-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.9.0
+python main.py --version      # FS-MetaPostDiag 1.9.1
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,25 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.9.1 — segni delle forze allineati al report Fluent
+
+Confronto componente per componente con il report *Forces* di Fluent (caso FW5, direzione `(0 -1 0)` per la deportanza e `(1 0 0)` per il drag). Il set di zone era già identico (43 vs 43); erano sbagliati **due segni**:
+
+| Grandezza | Prima | Fluent | Correzione |
+|---|---|---|---|
+| drag di pressione (`chassis`) | `-12,590` | `+12,586` | `-pid_fx_press` |
+| drag totale | `\|p\| + \|v\|` (moduli) | `p + v` con segno | somma algebrica |
+| viscosa verticale (`chassis`) | `+0,02` | `-0,02` | `pid_fy_visc` senza `-` |
+
+Effetto misurato sul caso FW5 (metà modello → ×2 per il full car):
+
+| | Fluent | Prima | Ora |
+|---|---|---|---|
+| Deportanza (metà / full) | 241,53 / 483,07 N | 243,38 / 486,76 N (+0,76%) | **241,50 / 483,00 N (−0,01%)** |
+| Drag (metà / full) | 110,52 / 221,05 N | 113,71 / 227,42 N (+2,9%) | **111,35 / 222,70 N (+0,75%)** |
+
+Il residuo sul drag è tutto nella componente **viscosa** (la nostra è ~8% più alta per zona): la pressione coincide al centesimo.
 
 ### v1.9.0 — viste Cp per lato e selezione manuale dei PID
 

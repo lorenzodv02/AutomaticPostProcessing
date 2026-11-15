@@ -258,3 +258,29 @@ def test_center_of_pressure_as_wheelbase_percent():
         assert math.isclose(kpis["wheelbase_m"], 1.0, rel_tol=1e-9)
     finally:
         shutil.rmtree(folder_b, ignore_errors=True)
+
+def test_pid_components_add_up_with_signs():
+    """
+    Forze per PID: totale = pressione + viscosa **con il segno**.
+
+    Regressione: il drag veniva calcolato sommando i MODULI (abs), e la viscosa
+    verticale aveva segno invertito. Qui si verifica che le componenti si sommino
+    algebricamente, come nel report "Forces" di Fluent.
+    """
+    result, _expectations, folder = _extract()
+    try:
+        pids = result["physics_data"]["per_pid_breakdown"]
+        assert pids
+        for pid in pids:
+            assert math.isclose(
+                pid["downforce_1x_N"],
+                pid["downforce_pressure_1x_N"] + pid["downforce_viscous_1x_N"],
+                abs_tol=1e-9,
+            ), (pid["zone_name"], "downforce")
+            assert math.isclose(
+                pid["drag_1x_N"],
+                pid["drag_pressure_1x_N"] + pid["drag_viscous_1x_N"],
+                abs_tol=1e-9,
+            ), (pid["zone_name"], "drag")
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
