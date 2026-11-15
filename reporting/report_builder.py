@@ -224,6 +224,106 @@ def _md_to_simple_html(md_text: str) -> str:
     return "\n".join(out)
 
 
+def _build_speed_estimator(v_ref: float, downforce_n: float, drag_n: float):
+    """
+    HTML, CSS e JS del cursore "forze a un'altra velocita'".
+
+    Fisica: a Cp congelato le forze scalano con q = 1/2 rho v^2, quindi il
+    fattore e' (v / v_ref)^2. CL*A e CD*A misurati restano quelli: il cursore
+    cambia solo la velocita', non la forma del campo di moto.
+    """
+    try:
+        v_ref = float(v_ref)
+        downforce_n = float(downforce_n)
+        drag_n = float(drag_n)
+    except (TypeError, ValueError):
+        return "", "", ""
+    if v_ref <= 0.0:
+        return "", "", ""
+
+    low = max(2.0, round(v_ref * 0.35 * 2.0) / 2.0)
+    high = round(v_ref * 2.0 * 2.0) / 2.0
+
+    html = """<section class="section-box speed-box">
+    <div class="section-title">
+        <span>Estrapolazione a un'altra velocit&agrave;</span>
+        <span class="badge badge-info">Cp congelato &middot; F &prop; v&sup2;</span>
+    </div>
+    <p class="speed-note">
+        Le forze misurate a __VREF__ m/s vengono riscalate con la pressione dinamica
+        <strong>q = &frac12;&rho;v&sup2;</strong>: &egrave; esatto per un campo di moto dato, ma a
+        velocit&agrave; molto diverse cambiano Reynolds, transizione e separazione, quindi fuori
+        da &plusmn;30% &egrave; solo un ordine di grandezza.
+    </p>
+    <div class="speed-row">
+        <input id="speed-slider" type="range" min="__LOW__" max="__HIGH__" step="0.5" value="__VREF__">
+        <div class="speed-readout"><span id="speed-v">__VREF__ m/s</span></div>
+    </div>
+    <div class="speed-grid">
+        <div class="speed-cell"><span class="val" id="speed-df">__DF__ N</span><span class="lbl">Deportanza</span></div>
+        <div class="speed-cell"><span class="val" id="speed-drag">__DR__ N</span><span class="lbl">Resistenza</span></div>
+        <div class="speed-cell"><span class="val" id="speed-ld">n/d</span><span class="lbl">|L|/D</span></div>
+        <div class="speed-cell"><span class="val" id="speed-power">n/d</span><span class="lbl">Potenza aero</span></div>
+    </div>
+    <p class="speed-note">Fattore q/q<sub>rif</sub>: <strong id="speed-factor">&times;1.00</strong>
+        &middot; il centro di pressione <strong>non</strong> si sposta (le forze scalano tutte uguali).</p>
+</section>"""
+
+    css = """    .speed-box { margin: 22px 0 26px; }
+    .speed-row { display: flex; align-items: center; gap: 18px; margin: 16px 0 12px; }
+    #speed-slider { flex: 1; height: 6px; accent-color: #FDEB19; cursor: pointer; }
+    .speed-readout { min-width: 120px; text-align: right; font-family: 'Roboto Mono', monospace;
+                     font-size: 20px; font-weight: 700; color: #FDEB19; }
+    .speed-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .speed-cell { background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.09);
+                  border-radius: 10px; padding: 12px 10px; text-align: center; }
+    .speed-cell .val { display: block; font-family: 'Roboto Mono', monospace; font-size: 20px;
+                       font-weight: 700; color: #D8EEFC; }
+    .speed-cell .lbl { display: block; margin-top: 5px; font-size: 10px; letter-spacing: 0.08em;
+                       text-transform: uppercase; color: #8FA8B8; }
+    .speed-note { font-size: 11px; color: #8FA8B8; margin: 8px 0 0; line-height: 1.5; }"""
+
+    js = """<script>
+(function () {
+    var BASE = __VREF__;
+    var DF = __DF__;
+    var DR = __DR__;
+    var slider = document.getElementById('speed-slider');
+    if (!slider) { return; }
+    var outV = document.getElementById('speed-v');
+    var outF = document.getElementById('speed-factor');
+    var outDF = document.getElementById('speed-df');
+    var outDR = document.getElementById('speed-drag');
+    var outLD = document.getElementById('speed-ld');
+    var outPW = document.getElementById('speed-power');
+    function update() {
+        var v = parseFloat(slider.value);
+        var k = (v / BASE) * (v / BASE);
+        if (outV) { outV.textContent = v.toFixed(1) + ' m/s'; }
+        if (outF) { outF.textContent = 'x' + k.toFixed(2); }
+        if (outDF) { outDF.textContent = (DF * k).toFixed(0) + ' N'; }
+        if (outDR) { outDR.textContent = (DR * k).toFixed(1) + ' N'; }
+        if (outLD) { outLD.textContent = Math.abs(DR) > 1e-9 ? (Math.abs(DF) / Math.abs(DR)).toFixed(2) : 'n/d'; }
+        if (outPW) { outPW.textContent = (Math.abs(DR) * k * v / 1000.0).toFixed(2) + ' kW'; }
+    }
+    slider.addEventListener('input', update);
+    update();
+})();
+</script>"""
+
+    values = {
+        "__VREF__": "%.1f" % v_ref,
+        "__LOW__": "%.1f" % low,
+        "__HIGH__": "%.1f" % high,
+        "__DF__": "%.0f" % downforce_n,
+        "__DR__": "%.1f" % drag_n,
+    }
+    for token, value in values.items():
+        html = html.replace(token, value)
+        js = js.replace(token, value)
+    return html, css, js
+
+
 def build_diagnostic_reports(
     config: dict,
     session_bundle: dict,
@@ -267,6 +367,9 @@ def build_diagnostic_reports(
     # rapporto firmato sarebbe negativo, ma la bonta' aerodinamica non cambia segno.
     l_d_signed = float(kpis.get("efficiency_l_d", kpis.get("efficiency_L_over_D", 0.0)))
     l_d = abs(l_d_signed)
+    # Cursore velocita': F(v) = F(v_ref) * (v/v_ref)^2 con Cp congelato.
+    v_ref_ms = float(kpis.get("velocity_inf_ms", kpis.get("velocity_inf", 14.0)) or 14.0)
+    speed_html, speed_css, speed_js = _build_speed_estimator(v_ref_ms, df_n, drag_n)
     cop_x = float(kpis.get("cop_x_m", 0.0))
     cop_pct = float(kpis.get("cop_x_pct", 50.0))
     cop_wb_raw = kpis.get("cop_wheelbase_pct")
@@ -825,6 +928,7 @@ def build_diagnostic_reports(
             }}
             .kpi-value, .highlight-ref, code {{ color: #6B5B00; }}
         }}
+    {speed_css}
     </style>
 </head>
 <body>
@@ -891,6 +995,8 @@ def build_diagnostic_reports(
             <div class="kpi-sub">Frazione superficie con flusso attaccato</div>
         </div>
     </div>
+
+    {speed_html}
 
     <!-- SEZIONE 0: AUDIT DI VERIFICA RIGOROSA DATI E IMMAGINI -->
     <div class="section-box">
@@ -1101,6 +1207,7 @@ def build_diagnostic_reports(
             if (modal) modal.style.display = 'none';
         }}
     </script>
+{speed_js}
 </body>
 </html>
 """

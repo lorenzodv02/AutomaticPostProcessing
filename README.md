@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.9.4-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.10.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.9.4
+python main.py --version      # FS-MetaPostDiag 1.10.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,14 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.10.0 — cursore velocità nel report
+
+Nel report c'è una sezione **Estrapolazione a un'altra velocità**: uno slider che ricalcola deportanza, drag, |L|/D e potenza aero a una velocità qualsiasi.
+
+Fisica: a **Cp congelato** le forze scalano con la pressione dinamica, `F(v) = F(v_ref)·(v/v_ref)²`. È esatto per il campo di moto simulato; non tiene conto del fatto che a velocità molto diverse cambiano Reynolds, transizione e separazione, quindi fuori da ±30% è solo un ordine di grandezza (la nota è scritta nel report stesso). Il CoP non si sposta, perché tutte le forze scalano allo stesso modo.
+
+Verificato eseguendo il JavaScript del report con un DOM finto: a 14 m/s 483 N / 222,7 N, a 28 m/s 1932 N / 890,8 N, a 7 m/s 121 N / 55,7 N, |L|/D costante 2,17.
 
 ### v1.9.4 — la velocità delle streamlines arriva dal config
 

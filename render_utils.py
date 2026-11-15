@@ -69,6 +69,23 @@ def resolve_velocity_inf(kpis, default: float = DEFAULT_VELOCITY_INF) -> float:
     return float(default)
 
 
+def scale_force_at_speed(force_n: float, v_ref: float, v_new: float) -> float:
+    """
+    Forza a una velocita' diversa supponendo il campo di moto congelato.
+
+    In un flusso incomprimibile con distribuzione di Cp fissata le forze scalano
+    con la pressione dinamica: F(v) = F(v_ref) * (v / v_ref)^2. E' esatto per
+    l'equazione di Bernouilli, ma NON tiene conto che a velocita' molto diverse
+    cambiano Reynolds, transizione e separazione: usarlo come stima, non come
+    sostituto di una simulazione.
+    """
+    v_ref = float(v_ref)
+    if v_ref <= 0.0:
+        return float(force_n)
+    ratio = float(v_new) / v_ref
+    return float(force_n) * ratio * ratio
+
+
 def side_mask(normals, axis: int = 1, sign: int = -1, threshold: float = 0.15):
     """
     Maschera dei triangoli che appartengono a un lato della superficie.
