@@ -30,6 +30,10 @@ datas = [
     ("suite/suite_template.html", "suite"),
     ("tools/design_explorer.py", "tools"),
     ("tools/recombination.py", "tools"),
+    # Launcher interattivo: modalita' batch importabili in-process.
+    ("batch/batch_extract.py", "batch"),
+    ("batch/make_tables.py", "batch"),
+    ("batch/check_dataset.py", "batch"),
 ]
 
 a = Analysis(

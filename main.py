@@ -228,6 +228,8 @@ def main():
     parser.add_argument("--open-report", action="store_true", help="Apre automaticamente il report HTML nel browser")
     parser.add_argument("--geometry-only", action="store_true",
                         help="Estrae solo la geometria del fondo dalla mesh (.cas) e scrive output_diagnostics/geometry.json, senza immagini ne report")
+    parser.add_argument("--launcher", action="store_true",
+                        help="Menu interattivo: singolo caso, multi-caso (batch), suite, geometria")
     parser.add_argument("--suite", action="store_true",
                         help="Modalita' suite: -w e' la cartella dati (dataset.csv). Esegue report completi, "
                              "geometria, tabelle e dashboard in un solo exe")
@@ -301,6 +303,11 @@ def main():
             print("[AI-CHECK] suggerimenti: verifica che la chiave sia di platform.deepseek.com, "
                   "che il modello sia tra quelli elencati e che l'account abbia credito.")
         return 0
+
+    if args.launcher:
+        from meta_driver.launcher_menu import run_launcher
+
+        return run_launcher(cfg, args, execute_full_diagnostic_pipeline)
 
     if args.suite:
         from meta_driver.suite_mode import run_suite

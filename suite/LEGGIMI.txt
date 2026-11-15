@@ -1,7 +1,12 @@
 Aero Suite — un processo, un report
 ===================================
 
-ATTENZIONE: dalla v1.18.0 la suite e' DENTRO l'eseguibile. Il comando normale e':
+ATTENZIONE: dalla v1.18.0 la suite e' DENTRO l'eseguibile; dalla v1.19.0 c'e' anche un
+launcher a menu:
+
+    FS-MetaPostDiag.exe --launcher
+
+Il comando diretto equivalente e':
 
     FS-MetaPostDiag.exe --suite -w "D:\Analisi\_dati_batch"
 

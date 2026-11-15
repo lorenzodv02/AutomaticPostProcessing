@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.18.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.19.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.18.0
+python main.py --version      # FS-MetaPostDiag 1.19.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,22 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.19.0 — Launcher: singolo caso o multi-caso, scelto da menu
+
+`FS-MetaPostDiag.exe --launcher` apre un menu (si può anche creare un collegamento sul desktop):
+
+```text
+1) Singolo caso      report completo (cartella con .cas/.dat)
+2) Multi-caso        estrazione batch dai .cas + tabelle + suite
+3) Suite             su una cartella dati già pronta
+4) Solo geometria    di un caso (nessun report)
+0) Esci
+```
+
+- **Multi-caso**: importa `batch_extract`, `make_tables` e `check_dataset` **dall'exe** (inclusi come dati) e li esegue in sequenza; chiede cartella radice, cartella dati, assieme (fondo/ala ant/ala post/full car) e se generare anche i report completi.
+- **Un solo file**: niente Python, niente zip di script, niente riga di comando da ricordare.
+- Le opzioni testuali (`--suite`, `--geometry-only`, `-w`) restano per l'automazione.
 
 ### v1.18.0 — Un solo exe: la suite è dentro FS-MetaPostDiag
 
