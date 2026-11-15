@@ -148,74 +148,38 @@ def execute_full_diagnostic_pipeline(config: dict, workspace_dir: str = None, lo
 
 
 def _run_geometry_only(cfg: dict, args) -> int:
-    """
-    Estrazione della sola geometria del fondo dalla mesh del .cas.
-
-    Scrive `output_diagnostics/geometry.json` accanto ai file del caso: la usa
-    la suite per confrontare i profili senza rifare immagini e report.
-    """
-    import json as _json
+    """Estrae solo la geometria del fondo/assieme e scrive geometry.json."""
+    from meta_driver.suite_mode import geometry_for_workspace
 
     workspace = args.workspace or (cfg.get("project") or {}).get("workspace_dir") or os.getcwd()
-    cas_file, dat_file, discovery_error = try_discover(workspace)
-    if not cas_file:
-        print("[GEOMETRIA] nessun file .cas in: %s%s"
-              % (workspace, (" (" + discovery_error + ")") if discovery_error else ""))
+    try:
+        result = geometry_for_workspace(cfg, workspace, args.assembly)
+    except FileNotFoundError as exc:
+        print("[GEOMETRIA] %s" % exc)
         return 2
-    print("[GEOMETRIA] caso: %s" % os.path.basename(cas_file))
-    assembly = args.assembly or (cfg.get("project") or {}).get("assembly_type") or "undertray"
-    convention = ((cfg.get("reference_values") or {}).get("report_force_convention") or "lift")
-    data = extract_real_mesh_and_cfd_data(
-        cas_path=cas_file, dat_path=dat_file, assembly_type=assembly,
-        ref_values=cfg.get("reference_values", {}), config=cfg,
-        force_convention=convention, log_fn=lambda message: None,
-    )
-    bbox = data.get("bounding_box") or {}
-    scale = float(bbox.get("coord_scale_to_m") or 1.0)
-    half_car = bool(data.get("is_half_car_symmetric"))
-    geometry = extract_geometry(data.get("zone_meshes") or {}, bbox, coord_scale=scale,
-                                assembly=assembly, half_car=half_car)
-    payload = {
-        "case": os.path.splitext(os.path.basename(cas_file))[0],
-        "cas_file": cas_file,
-        "assembly": assembly,
-        "half_car": half_car,
-        "bounding_box": bbox,
-        "summary": geometry.get("summary") or {},
-        "geometry": geometry,
-    }
-    output_dir = os.path.join(workspace, "output_diagnostics")
-    os.makedirs(output_dir, exist_ok=True)
-    path = os.path.join(output_dir, "geometry.json")
-    with open(path, "w", encoding="utf-8") as handle:
-        _json.dump(payload, handle, ensure_ascii=False, indent=2)
-    if not geometry.get("available"):
-        print("[GEOMETRIA] nessuna zona aero riconosciuta nell'assieme %s" % assembly)
-        return 1
+    payload = result["payload"]
+    summary = payload.get("summary") or {}
+    geometry = payload.get("geometry") or {}
+    print("[GEOMETRIA] caso: %s | assieme: %s | %d zone"
+          % (payload["case"], payload.get("assembly") or "?",
+             len(geometry.get("zones") or [])))
     floor = geometry.get("floor") or {}
     if floor.get("available"):
         ramp = floor.get("ramp") or {}
         indexes = floor.get("x_m") or [0.0]
         position = min(int(floor.get("throat_pct", 0) / 100.0 * (len(indexes) - 1)), len(indexes) - 1)
-        print("[GEOMETRIA] fondo: %.2f..%.2f m | altezza minima %.1f mm al %.0f%% | "
-              "%s %.1f deg su %.2f m | espansione %.2f | area %.3f m2"
+        print("[GEOMETRIA] fondo: %.2f..%.2f m | altezza minima %.1f mm | %s %.1f deg | espansione %.2f"
               % (floor["x_range_m"][0], floor["x_range_m"][1],
                  (floor.get("h_min_m") or [0.0])[position] * 1000.0,
-                 floor.get("throat_pct", 0.0), ramp.get("kind") or "tratto in salita",
-                 ramp.get("angle_deg") or 0.0, ramp.get("length_m") or 0.0,
-                 floor.get("expansion_ratio") or 0.0, floor.get("floor_area_m2") or 0.0))
+                 ramp.get("kind") or "salita", ramp.get("angle_deg") or 0.0,
+                 floor.get("expansion_ratio") or 0.0))
     wings = geometry.get("wings") or {}
     for label, wing in (("ala anteriore", wings.get("front")), ("ala posteriore", wings.get("rear"))):
         if wing and wing.get("available"):
             print("[GEOMETRIA] %s: apertura %.2f m | corda media %.3f m | area %.3f m2 | allungamento %.2f"
                   % (label, wing["span_m"], wing["chord_mean_m"] or 0.0,
                      wing["planform_m2"], wing["aspect_ratio"] or 0.0))
-    parts = geometry.get("parts") or {}
-    if parts:
-        print("[GEOMETRIA] superfici per famiglia: " + ", ".join(
-            "%s %.3f m2" % (family, bucket["area_m2"])
-            for family, bucket in sorted(parts.items(), key=lambda kv: -kv[1]["area_m2"])))
-    print("[GEOMETRIA] assieme: %s | scritto: %s" % (assembly, path))
+    print("[GEOMETRIA] scritto: %s" % result["path"])
     return 0
 
 
@@ -264,6 +228,15 @@ def main():
     parser.add_argument("--open-report", action="store_true", help="Apre automaticamente il report HTML nel browser")
     parser.add_argument("--geometry-only", action="store_true",
                         help="Estrae solo la geometria del fondo dalla mesh (.cas) e scrive output_diagnostics/geometry.json, senza immagini ne report")
+    parser.add_argument("--suite", action="store_true",
+                        help="Modalita' suite: -w e' la cartella dati (dataset.csv). Esegue report completi, "
+                             "geometria, tabelle e dashboard in un solo exe")
+    parser.add_argument("--skip-process", action="store_true",
+                        help="Con --suite: salta i report completi (solo geometria/tabelle/dashboard)")
+    parser.add_argument("--only", type=str, default=None,
+                        help="Con --suite: limita ai casi indicati (separati da virgola)")
+    parser.add_argument("--force", action="store_true",
+                        help="Con --suite: rifai anche i casi gia' presenti")
 
     args = parser.parse_args()
     cfg = load_config(args.config)
@@ -328,6 +301,11 @@ def main():
             print("[AI-CHECK] suggerimenti: verifica che la chiave sia di platform.deepseek.com, "
                   "che il modello sia tra quelli elencati e che l'account abbia credito.")
         return 0
+
+    if args.suite:
+        from meta_driver.suite_mode import run_suite
+
+        return run_suite(cfg, args, execute_full_diagnostic_pipeline)
 
     if args.geometry_only:
         return _run_geometry_only(cfg, args)

@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.17.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.18.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.17.0
+python main.py --version      # FS-MetaPostDiag 1.18.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,18 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.18.0 — Un solo exe: la suite è dentro FS-MetaPostDiag
+
+La separazione exe/suite non serviva: era una scorciatoia di packaging. Ora **un solo file** fa tutto.
+
+- **`FS-MetaPostDiag.exe --suite -w <cartella dati>`** esegue in-process: report completi per ogni caso, geometria, tabelle e `Aero_Suite.html`. Niente Python installato, niente script da copiare.
+- Modalità veloce: `--suite --skip-process` (solo geometria/tabelle/dashboard, ~9 s per caso reale).
+- Altre opzioni: `--no-meta-batch` (salta META), `--only CASO[,CASO]`, `--force`.
+- I moduli della suite (`aero_suite.py`, `brand_theme.py`, template) e i motori (`design_explorer.py`, `recombination.py`) sono inclusi nell'exe come dati; `meta_driver/suite_mode.py` li orchestra.
+- Gli script in `suite/` restano per lo sviluppo e la manutenzione, ma **non servono all'utente**: il pacchetto è l'exe.
+
+Verificato sul caso reale FW5: `--suite` completo in **133 s** (25 immagini, report 85 MB, geometria, dashboard); `--suite --skip-process` in **9 s**.
 
 ### v1.17.0 — La suite fa tutto: report completi per ogni caso
 

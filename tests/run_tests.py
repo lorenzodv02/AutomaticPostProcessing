@@ -21,6 +21,7 @@ MODULES = (
     "tests.test_recombination",
     "tests.test_geometry",
     "tests.test_suite",
+    "tests.test_suite_mode",
     "tests.test_config_bridge",
     "tests.test_parser_synthetic",
     "tests.test_rules_thresholds",

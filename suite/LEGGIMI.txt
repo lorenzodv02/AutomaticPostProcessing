@@ -1,6 +1,15 @@
 Aero Suite — un processo, un report
 ===================================
 
+ATTENZIONE: dalla v1.18.0 la suite e' DENTRO l'eseguibile. Il comando normale e':
+
+    FS-MetaPostDiag.exe --suite -w "D:\Analisi\_dati_batch"
+
+con le opzioni --skip-process (solo analisi dati), --no-meta-batch, --only, --force.
+Gli script di questa cartella restano per sviluppo e manutenzione: non servono
+all'utente finale. Quanto segue descrive cosa fa la suite, in qualunque modo venga
+lanciata.
+
 Un solo comando che porta dal `.cas` al progetto **completo**: esegue la corsa
 di post-processing per ogni caso (immagini, report HTML/PDF, xlsx, AI Vision se
 configurata), estrae la geometria **di ogni assieme** (fondo, ala anteriore,

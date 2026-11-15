@@ -115,12 +115,15 @@ def case_directory(data_dir, case):
 
 
 # ---------------------------------------------------------------------- stadi
-def stage_geometry(data_dir, exe, cases_root=None, force=False, timeout=900):
+def stage_geometry(data_dir, exe=None, cases_root=None, force=False, timeout=900,
+                   only=None, processor=None):
     cases = load_cases(data_dir)
     geom_dir = os.path.join(data_dir, GEOM_DIR)
     os.makedirs(geom_dir, exist_ok=True)
     done = skipped = failed = 0
     for case in cases:
+        if only and case["id"] not in only:
+            continue
         target = os.path.join(geom_dir, case["id"] + ".json")
         if os.path.isfile(target) and not force:
             skipped += 1
@@ -134,17 +137,26 @@ def stage_geometry(data_dir, exe, cases_root=None, force=False, timeout=900):
             print("  %-24s cartella del caso non trovata (usa --cases-root)" % case["id"])
             failed += 1
             continue
-        command = [exe, "--geometry-only", "-w", directory]
-        if case.get("assembly"):
-            command.extend(["--assembly", case["assembly"]])
-        try:
-            result = subprocess.run(command, capture_output=True, text=True, errors="replace",
-                                    timeout=timeout)
-            output = (result.stdout or "") + (result.stderr or "")
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            print("  %-24s errore: %s" % (case["id"], exc))
-            failed += 1
-            continue
+        output = ""
+        if processor is not None:
+            try:
+                processor(directory, case)
+            except (OSError, RuntimeError, FileNotFoundError) as exc:
+                print("  %-24s errore: %s" % (case["id"], exc))
+                failed += 1
+                continue
+        else:
+            command = [exe, "--geometry-only", "-w", directory]
+            if case.get("assembly"):
+                command.extend(["--assembly", case["assembly"]])
+            try:
+                result = subprocess.run(command, capture_output=True, text=True,
+                                        errors="replace", timeout=timeout)
+                output = (result.stdout or "") + (result.stderr or "")
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                print("  %-24s errore: %s" % (case["id"], exc))
+                failed += 1
+                continue
         produced = os.path.join(directory, "output_diagnostics", "geometry.json")
         if not os.path.isfile(produced):
             print("  %-24s nessuna geometria prodotta" % case["id"])
@@ -241,8 +253,8 @@ def _collect_case_outputs(target_dir, case, case_dir=None):
     }
 
 
-def stage_process(data_dir, exe, cases_root=None, force=False, no_meta=False,
-                  only=None, timeout=3600):
+def stage_process(data_dir, exe=None, cases_root=None, force=False, no_meta=False,
+                  only=None, timeout=3600, processor=None):
     """
     Corsa COMPLETA dell'app per ogni caso: mesh, forze, immagini, META,
     report HTML (e PDF/xlsx), AI Vision se configurata. Gli output vengono
@@ -272,19 +284,28 @@ def stage_process(data_dir, exe, cases_root=None, force=False, no_meta=False,
             print("  %-24s cartella del caso non trovata (usa --cases-root)" % case["id"])
             failed += 1
             continue
-        command = [exe, "-w", directory]
-        if case.get("assembly"):
-            command.extend(["--assembly", case["assembly"]])
-        if no_meta:
-            command.append("--no-meta-batch")
-        try:
-            result = subprocess.run(command, capture_output=True, text=True,
-                                    errors="replace", timeout=timeout)
-            output = (result.stdout or "") + (result.stderr or "")
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            print("  %-24s errore: %s" % (case["id"], exc))
-            failed += 1
-            continue
+        output = ""
+        if processor is not None:
+            try:
+                processor(directory, case)
+            except (OSError, RuntimeError, FileNotFoundError) as exc:
+                print("  %-24s errore: %s" % (case["id"], exc))
+                failed += 1
+                continue
+        else:
+            command = [exe, "-w", directory]
+            if case.get("assembly"):
+                command.extend(["--assembly", case["assembly"]])
+            if no_meta:
+                command.append("--no-meta-batch")
+            try:
+                result = subprocess.run(command, capture_output=True, text=True,
+                                        errors="replace", timeout=timeout)
+                output = (result.stdout or "") + (result.stderr or "")
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                print("  %-24s errore: %s" % (case["id"], exc))
+                failed += 1
+                continue
         produced = os.path.join(directory, "output_diagnostics")
         if not os.path.isdir(produced):
             print("  %-24s nessun output prodotto" % case["id"])

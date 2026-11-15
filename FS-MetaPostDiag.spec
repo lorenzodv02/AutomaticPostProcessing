@@ -23,6 +23,13 @@ datas = [
     ("assets/uc-monogram-navy.png", "assets"),
     ("assets/wordmark-white.png", "assets"),
     ("assets/fonts", "assets/fonts"),
+    # Aero Suite dentro l'exe: orchestratore, template brandizzato e motori.
+    # `--suite` li importa da _MEIPASS, senza Python installato a parte.
+    ("suite/aero_suite.py", "suite"),
+    ("suite/brand_theme.py", "suite"),
+    ("suite/suite_template.html", "suite"),
+    ("tools/design_explorer.py", "tools"),
+    ("tools/recombination.py", "tools"),
 ]
 
 a = Analysis(
