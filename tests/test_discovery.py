@@ -11,7 +11,7 @@ import os
 import shutil
 import tempfile
 
-from file_discovery import NoCaseFilesFound, case_files_in, discover_cas_dat
+from file_discovery import NoCaseFilesFound, case_files_in, discover_cas_dat, try_discover
 
 
 def _temp_dir():
@@ -105,5 +105,53 @@ def test_dat_is_optional():
         cas_file, dat_file = discover_cas_dat(folder)
         assert os.path.basename(cas_file) == "solo_cas.cas"
         assert dat_file is None
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+# ------------------------------------------------------------------------------
+# Variante senza eccezioni, usata dalla GUI nei callback Tkinter
+# ------------------------------------------------------------------------------
+def test_try_discover_does_not_raise_when_cas_is_missing():
+    """
+    La GUI chiama la scoperta dentro un callback `after`: se sollevasse, Tkinter
+    stamperebbe "Exception in Tkinter callback" su stderr e l'utente non
+    vedrebbe nulla. `try_discover` restituisce invece il messaggio.
+    """
+    folder = _temp_dir()
+    try:
+        _write(folder, "BK120908EDUNIVERSITYED_license.dat")
+
+        cas_file, dat_file, error = try_discover(folder)
+        assert cas_file is None
+        assert dat_file is None
+        assert error and ".cas" in error
+        assert "license.dat" in error
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_try_discover_returns_pair_without_error():
+    folder = _temp_dir()
+    try:
+        _write(folder, "caso.cas")
+        _write(folder, "caso.dat")
+
+        cas_file, dat_file, error = try_discover(folder)
+        assert error is None
+        assert os.path.basename(cas_file) == "caso.cas"
+        assert os.path.basename(dat_file) == "caso.dat"
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+    # e la variante che solleva continua a comportarsi come prima
+    folder = _temp_dir()
+    try:
+        try:
+            discover_cas_dat(folder)
+        except NoCaseFilesFound:
+            pass
+        else:
+            raise AssertionError("discover_cas_dat doveva sollevare")
     finally:
         shutil.rmtree(folder, ignore_errors=True)

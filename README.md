@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.0.3
+python main.py --version      # FS-MetaPostDiag 1.0.4
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,12 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.0.4 — nessun traceback Tkinter nella GUI
+
+- **Corretto un difetto introdotto nella v1.0.3**: `discover_cas_dat` sollevava `NoCaseFilesFound` e la GUI la chiama dentro un callback `after`, quindi senza `.cas` comparivano `Exception in Tkinter callback` su stderr.
+- Nuova `file_discovery.try_discover()` che **non solleva** e restituisce `(cas, dat, messaggio)`: la GUI mostra il messaggio nella propria console, la CLI continua a uscire con `[ERRORE]` e codice non nullo.
+- 2 nuovi test (47 totali) sulla variante senza eccezioni.
 
 ### v1.0.3 — avvio senza argomenti e selezione dei file
 

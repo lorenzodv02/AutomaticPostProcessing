@@ -15,7 +15,7 @@ prendeva il primo `.dat` in ordine alfabetico e poi falliva con un traceback.
 import glob
 import os
 
-__all__ = ["NoCaseFilesFound", "discover_cas_dat", "case_files_in"]
+__all__ = ["NoCaseFilesFound", "discover_cas_dat", "try_discover", "case_files_in", "ignored_files"]
 
 CAS_PATTERNS = ("*.cas", "*.cas.h5", "*.cas.gz")
 DAT_PATTERNS = ("*.dat", "*.dat.h5", "*.dat.gz")
@@ -93,48 +93,48 @@ def ignored_files(folder: str) -> list:
     return skipped
 
 
-def discover_cas_dat(workspace_dir: str):
+def _missing_case_message(folder: str, dat_files: list) -> str:
+    """Messaggio d'errore per il caso "nessun .cas", con cosa e' stato trovato/ignorato."""
+    hint = ""
+    if dat_files:
+        elenco = ", ".join(os.path.basename(path) for path in dat_files[:3])
+        hint = (
+            "\n  Ho trovato %d file .dat (%s) ma nessun .cas: servono entrambi."
+            % (len(dat_files), elenco)
+        )
+    skipped = ignored_files(folder)
+    if skipped:
+        elenco_skip = ", ".join(os.path.basename(path) for path in skipped[:3])
+        hint += (
+            "\n  Ho ignorato %d file con estensione CFD ma non-dataset (es. %s)."
+            % (len(skipped), elenco_skip)
+        )
+    return (
+        "Nessun file .cas trovato in '%s'.%s\n"
+        "  Indica la cartella del caso CFD con --workspace (-w) oppure scegli la cartella dalla GUI (--gui).\n"
+        "  Nota: il parser legge il formato binario .cas/.dat di Fluent; i file di licenza non sono dataset."
+        % (os.path.abspath(folder), hint)
+    )
+
+
+def try_discover(workspace_dir: str):
     """
-    Individua la coppia di file da analizzare.
+    Variante che NON solleva: restituisce `(cas, dat, messaggio_errore)`.
 
-    Regole:
-      * il `.cas` e' obbligatorio: senza di esso solleva `NoCaseFilesFound` con
-        un messaggio che dice cosa fare (prima si arrivava a un FileNotFoundError);
-      * il `.dat` viene preferito con lo stesso nome base del `.cas`
-        (`caso.cas` + `caso.dat`), altrimenti si usa il primo `.dat` valido;
-      * i file che sembrano licenze o autre non-dataset sono ignorati.
-
-    Restituisce `(cas_path, dat_path)`; `dat_path` puo' essere `None` (il parser
-    tollera l'assenza del `.dat` e usa pressione nulla).
+    E' pensata per le interfacce grafiche: un'eccezione dentro un callback
+    Tkinter (`after`) diventa un `Exception in Tkinter callback` su stderr, non
+    gestito e invisibile all'utente. La GUI usa questa variante e mostra il
+    messaggio nella console dell'app; la CLI usa `discover_cas_dat` e stampa
+    l'errore con codice di uscita.
     """
     folder = workspace_dir or "."
     cas_files, dat_files = case_files_in(folder)
 
     if not cas_files:
-        hint = ""
-        if dat_files:
-            elenco = ", ".join(os.path.basename(path) for path in dat_files[:3])
-            hint = (
-                "\n  Ho trovato %d file .dat (%s) ma nessun .cas: servono entrambi."
-                % (len(dat_files), elenco)
-            )
-        skipped = ignored_files(folder)
-        if skipped:
-            elenco_skip = ", ".join(os.path.basename(path) for path in skipped[:3])
-            hint += (
-                "\n  Ho ignorato %d file con estensione CFD ma non-dataset (es. %s)."
-                % (len(skipped), elenco_skip)
-            )
-        raise NoCaseFilesFound(
-            "Nessun file .cas trovato in '%s'.%s\n"
-            "  Indica la cartella del caso CFD con --workspace (-w) oppure scegli la cartella dalla GUI (--gui).\n"
-            "  Nota: il parser legge il formato binario .cas/.dat di Fluent; i file di licenza non sono dataset."
-            % (os.path.abspath(folder), hint)
-        )
+        return None, None, _missing_case_message(folder, dat_files)
 
     cas_file = cas_files[0]
     dat_file = None
-
     cas_stem = _stem(cas_file).lower()
     for candidate in dat_files:
         if _stem(candidate).lower() == cas_stem:
@@ -142,5 +142,18 @@ def discover_cas_dat(workspace_dir: str):
             break
     if dat_file is None and dat_files:
         dat_file = dat_files[0]
+    return cas_file, dat_file, None
 
+
+def discover_cas_dat(workspace_dir: str):
+    """
+    Individua la coppia `(cas, dat)`; solleva `NoCaseFilesFound` se il `.cas` manca.
+
+    Regole: `.cas` obbligatorio, `.dat` preferito con lo stesso nome base, file
+    che sembrano licenze ignorati, `.dat` opzionale. Per la versione senza
+    eccezioni (GUI) vedi `try_discover`.
+    """
+    cas_file, dat_file, error = try_discover(workspace_dir)
+    if error:
+        raise NoCaseFilesFound(error)
     return cas_file, dat_file

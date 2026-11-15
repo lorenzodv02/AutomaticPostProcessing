@@ -21,7 +21,8 @@ import webbrowser
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-from meta_driver.launcher import discover_cas_dat, find_meta_executable
+from meta_driver.launcher import find_meta_executable
+from file_discovery import try_discover
 from meta_driver.fluent_parser import inspect_fluent_cas_zones
 
 
@@ -904,14 +905,21 @@ class AeroDiagnosticsGUI:
     def _inspect_current_workspace(self):
         ws = self.var_workspace.get().strip()
         asm_key = self._assembly_key()
-        cas_file, dat_file = discover_cas_dat(ws)
+        # `try_discover` non solleva: un'eccezione qui dentro diventerebbe un
+        # "Exception in Tkinter callback" su stderr (callback `after`), invisibile
+        # all'utente invece che mostrato nella console dell'app.
+        cas_file, dat_file, discovery_error = try_discover(ws)
         self._update_file_labels(cas_file, dat_file)
 
         if not cas_file:
             self.stat_pid.configure(text="—")
             self.lbl_zone_summary.configure(
                 text="Zone isolate: —  ·  nessun file .cas nella cartella selezionata")
-            self._log(f"[SCAN] Nessun file .cas trovato in: {ws}")
+            message = discovery_error or f"Nessun file .cas trovato in: {ws}"
+            for line in message.splitlines():
+                text = line.strip()
+                if text:
+                    self._log(f"[SCAN] {text}")
             return
 
         try:
