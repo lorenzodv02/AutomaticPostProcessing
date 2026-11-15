@@ -40,6 +40,9 @@ __all__ = [
     "assembly_keywords",
     "cut_stations",
     "force_convention",
+    "validate_config",
+    "wheelbase_reference",
+    "EXPECTED_AXES",
     "thresholds",
     "cp_range",
     "reference_values",
@@ -74,6 +77,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "viscosity_mu": 1.7894e-5,
         "reference_area": 1.08,
         "wheelbase": 1.535,
+        # Riferimenti degli assi (m, asse X): se dichiarati, il CoP viene espresso
+        # anche come percentuale del passo. None = non disponibili.
+        "front_axle_x": None,
+        "rear_axle_x": None,
         # Convenzione del report forze, come la definisce Fluent:
         #   "lift"      -> proiezione su +Y (deportanza negativa) [default Fluent]
         #   "downforce" -> segno invertito (deportanza positiva)
@@ -282,6 +289,95 @@ def cut_stations(config: Dict[str, Any], assembly_type: str) -> Tuple[List[float
     x_stations = _sanitize_stations(profile.get("x_cuts_normalized"), DEFAULT_X_STATIONS)
     z_stations = _sanitize_stations(profile.get("z_cuts_normalized"), DEFAULT_Z_STATIONS)
     return x_stations, z_stations
+
+
+# Il parser proietta le forze su +Y e legge X longitudinale, Z laterale.
+EXPECTED_AXES = {
+    "longitudinal_axis": "X",
+    "vertical_axis": "Y",
+    "lateral_axis": "Z",
+}
+
+
+def _axis_letter(value) -> str:
+    """Lettera dell'asse dichiarata ("X", "+x", "X-axis" -> "X")."""
+    text = str(value or "").strip().upper().lstrip("+-")
+    return text[:1]
+
+
+def validate_config(config: Dict[str, Any]) -> List[str]:
+    """
+    Controlli di coerenza sul config, come elenco di messaggi leggibili.
+
+    Non solleva eccezioni: il config resta utilizzabile. Serve a intercettare gli
+    errori **silenziosi** (assi invertiti, convenzione sconosciuta, grandezze non
+    fisiche) che altrimenti produrrebbero numeri sbagliati senza alcun avviso.
+    """
+    warnings: List[str] = []
+    cfg = _as_dict(config)
+
+    coords = _as_dict(cfg.get("coordinate_system"))
+    for key, expected in EXPECTED_AXES.items():
+        declared = coords.get(key)
+        if declared is None:
+            continue
+        actual = _axis_letter(declared)
+        if actual and actual != expected:
+            warnings.append(
+                "coordinate_system.%s = '%s' ma il parser assume %s verso l'alto: "
+                "i segni delle forze risulterebbero errati." % (key, declared, expected)
+            )
+
+    ref = _deep_merge(DEFAULT_CONFIG["reference_values"],
+                      _as_dict(cfg.get("reference_values")))
+    for key, minimum in (("velocity_inf", 1e-9), ("density_air", 1e-12), ("reference_area", 1e-12)):
+        value = ref.get(key)
+        if isinstance(value, (int, float)) and float(value) <= minimum:
+            warnings.append("reference_values.%s deve essere > 0 (trovato %s)." % (key, value))
+
+    wheelbase = ref.get("wheelbase")
+    if isinstance(wheelbase, (int, float)) and float(wheelbase) <= 0:
+        warnings.append("reference_values.wheelbase deve essere > 0 (trovato %s)." % wheelbase)
+
+    convention = str(ref.get("report_force_convention", "lift") or "").strip().lower()
+    if convention not in ("lift", "downforce"):
+        warnings.append(
+            "reference_values.report_force_convention = '%s' non riconosciuta: uso 'lift'."
+            % ref.get("report_force_convention")
+        )
+
+    front, rear = ref.get("front_axle_x"), ref.get("rear_axle_x")
+    if (isinstance(front, (int, float)) and isinstance(rear, (int, float))
+            and isinstance(wheelbase, (int, float)) and float(wheelbase) > 0):
+        span = abs(float(rear) - float(front))
+        if span > 1e-6 and abs(span - float(wheelbase)) > 0.05 * float(wheelbase):
+            warnings.append(
+                "wheelbase = %.3f m non concorda con gli assi (|rear_axle_x - front_axle_x| = %.3f m)."
+                % (float(wheelbase), span)
+            )
+
+    fluent = cfg.get("fluent_variables")
+    if fluent is not None and not isinstance(fluent, dict):
+        warnings.append(
+            "fluent_variables deve essere una mappa (nome interno -> elenco di nomi Fluent); "
+            "e' dichiarativo, nessun codice la legge."
+        )
+    return warnings
+
+
+def wheelbase_reference(config: Dict[str, Any]) -> Tuple[float, float]:
+    """
+    Riferimenti degli assi (front_axle_x, rear_axle_x) se dichiarati nel config.
+
+    Servono a esprimere il centro di pressione come percentuale del passo.
+    Restituisce (0.0, 0.0) quando non sono disponibili.
+    """
+    ref = _deep_merge(DEFAULT_CONFIG["reference_values"],
+                      _as_dict(_as_dict(config).get("reference_values")))
+    front, rear = ref.get("front_axle_x"), ref.get("rear_axle_x")
+    if isinstance(front, (int, float)) and isinstance(rear, (int, float)):
+        return float(front), float(rear)
+    return 0.0, 0.0
 
 
 def force_convention(config: Dict[str, Any]) -> str:

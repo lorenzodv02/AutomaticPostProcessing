@@ -269,6 +269,11 @@ def build_diagnostic_reports(
     l_d = abs(l_d_signed)
     cop_x = float(kpis.get("cop_x_m", 0.0))
     cop_pct = float(kpis.get("cop_x_pct", 50.0))
+    cop_wb_raw = kpis.get("cop_wheelbase_pct")
+    cop_wb = float(cop_wb_raw) if isinstance(cop_wb_raw, (int, float)) else None
+    cop_wb_html = (
+        f" &middot; {cop_wb:.1f}% del passo" if cop_wb is not None else ""
+    )
     stall_val = float(kpis.get("stalled_area_percentage", kpis.get("stalled_surface_pct", 0.0)))
     cp_min = float(kpis.get("peak_suction_cp", -2.5))
     cp_min_x = float(kpis.get("peak_suction_x_pct", 60.0))
@@ -843,7 +848,7 @@ def build_diagnostic_reports(
         <div class="kpi-card">
             <div class="kpi-label">Centro di Pressione (X_CoP)</div>
             <div class="kpi-value">{cop_pct:.1f}% L</div>
-            <div class="kpi-sub">Coordinata X = <strong>{cop_x:.3f} m</strong></div>
+            <div class="kpi-sub">Coordinata X = <strong>{cop_x:.3f} m</strong>{cop_wb_html}</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Area con Tau_w,x &le; 0 (Stallo)</div>

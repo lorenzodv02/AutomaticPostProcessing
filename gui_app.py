@@ -24,6 +24,7 @@ from tkinter import ttk, filedialog, messagebox
 import brand
 from brand import asset_path as brand_asset
 from brand import families as brand_families
+from config_bridge import validate_config
 from meta_driver.launcher import find_meta_executable
 from file_discovery import try_discover
 from meta_driver.fluent_parser import inspect_fluent_cas_zones
@@ -671,6 +672,10 @@ class AeroDiagnosticsGUI:
         self._build_action_card(right)
         self._build_log_card(right)
         self._set_status("Pronto", SUCCESS)
+        # Coerenza del config: gli errori silenziosi (assi invertiti, valori non
+        # fisici) vanno visti qui, non scoperti da numeri sbagliati nel report.
+        for warning in validate_config(self.config):
+            self._log("[CONFIG-WARN] " + warning)
 
         self._build_footer()
 

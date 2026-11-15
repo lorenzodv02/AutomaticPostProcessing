@@ -24,13 +24,14 @@ def _quiet(*_args, **_kwargs):
     return None
 
 
-def _extract(assembly="undertray", force_convention="lift"):
+def _extract(assembly="undertray", force_convention="lift", ref_values=None):
     folder = tempfile.mkdtemp(prefix="dsh_case_")
     cas_path, dat_path, expectations = build_synthetic_case(folder)
     result = extract_real_mesh_and_cfd_data(
         cas_path=cas_path,
         dat_path=dat_path,
         assembly_type=assembly,
+        ref_values=ref_values,
         force_convention=force_convention,
         log_fn=_quiet,
     )
@@ -223,3 +224,37 @@ def test_cp_matches_hand_calculation():
         assert math.isclose(flat["cp_mean"], expected_cp, rel_tol=1e-2), (flat["cp_mean"], expected_cp)
     finally:
         shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_center_of_pressure_as_wheelbase_percent():
+    """
+    Con i riferimenti degli assi nel config il CoP viene espresso anche come
+    percentuale del passo; senza di essi il KPI resta None (non compare).
+    """
+    base_res, _exp, folder_a = _extract()
+    try:
+        kpis = base_res["physics_data"]["summary_kpis"]
+        assert kpis["cop_wheelbase_pct"] is None
+        assert kpis["wheelbase_m"] is None
+    finally:
+        shutil.rmtree(folder_a, ignore_errors=True)
+
+    refs = {
+        "velocity_inf": 14.0,
+        "density_air": 1.225,
+        "reference_area": 1.08,
+        "front_axle_x": 0.0,
+        "rear_axle_x": 1.0,
+        "wheelbase": 1.0,
+    }
+    res, _exp, folder_b = _extract(ref_values=refs)
+    try:
+        kpis = res["physics_data"]["summary_kpis"]
+        pct = kpis["cop_wheelbase_pct"]
+        assert pct is not None
+        assert 0.0 <= pct <= 100.0, pct
+        expected = (float(kpis["cop_x_m"]) - 0.0) / 1.0 * 100.0
+        assert math.isclose(pct, expected, abs_tol=0.15), (pct, expected)
+        assert math.isclose(kpis["wheelbase_m"], 1.0, rel_tol=1e-9)
+    finally:
+        shutil.rmtree(folder_b, ignore_errors=True)

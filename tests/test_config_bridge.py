@@ -186,3 +186,46 @@ def test_bundled_dir_uses_meipass_when_frozen():
     meipass = os.path.join(os.sep, "tmp", "_MEI1234")
     with mock.patch.object(cb.sys, "_MEIPASS", meipass, create=True):
         assert cb.bundled_dir() == meipass
+
+
+def test_validate_config_accepts_shipped_config():
+    """Il config.yaml distribuito non deve produrre avvisi."""
+    config, _path = cb.load_config()
+    assert cb.validate_config(config) == []
+
+
+def test_validate_config_catches_inverted_axes():
+    """Un asse dichiarato diverso da quello assunto dal parser deve avvisare."""
+    config, _path = cb.load_config()
+    config["coordinate_system"]["vertical_axis"] = "Z"
+    warnings = cb.validate_config(config)
+    assert any("vertical_axis" in w for w in warnings), warnings
+    assert any("Y" in w for w in warnings), warnings
+
+
+def test_validate_config_catches_non_physical_values_and_convention():
+    config, _path = cb.load_config()
+    config["reference_values"]["reference_area"] = 0.0
+    config["reference_values"]["wheelbase"] = -1.0
+    config["reference_values"]["report_force_convention"] = "boh"
+    joined = " | ".join(cb.validate_config(config))
+    assert "reference_area" in joined
+    assert "wheelbase" in joined
+    assert "report_force_convention" in joined
+
+
+def test_validate_config_catches_wheelbase_axle_mismatch():
+    config, _path = cb.load_config()
+    config["reference_values"]["front_axle_x"] = 0.0
+    config["reference_values"]["rear_axle_x"] = 2.0      # passo reale 2.0 m
+    config["reference_values"]["wheelbase"] = 1.0         # dichiarato 1.0 m
+    warnings = cb.validate_config(config)
+    assert any("wheelbase" in w and "assi" in w for w in warnings), warnings
+
+
+def test_wheelbase_reference_helper():
+    config, _path = cb.load_config()
+    assert cb.wheelbase_reference(config) == (0.0, 0.0)
+    config["reference_values"]["front_axle_x"] = 0.1
+    config["reference_values"]["rear_axle_x"] = 1.6
+    assert cb.wheelbase_reference(config) == (0.1, 1.6)

@@ -12,8 +12,15 @@
 #     assemblies.<t>.thresholds     -> severita' della diagnosi
 #     assemblies.<t>.cp_range       -> scala colore del Cp
 #     ai_vision.*                   -> commento AI opzionale
-#   SOLO DOCUMENTAZIONE (nessun codice le legge, tenute come riferimento):
-#     coordinate_system.*, fluent_variables, wheelbase
+#   CONTROLLATE all'avvio (`config_bridge.validate_config`, avvisi nel log):
+#     coordinate_system.*  -> gli assi devono essere X longitudinale, Y verticale, Z laterale
+#     reference_values.*   -> velocita', densita', area, passo devono essere > 0
+#     reference_values.report_force_convention -> "lift" oppure "downforce"
+#   DICHIARATIVE (nessun codice le legge):
+#     fluent_variables     -> elenco dei nomi Fluent, solo documentazione
+#   USATE SE PRESENTI:
+#     reference_values.wheelbase + front_axle_x/rear_axle_x
+#       -> CoP espresso anche in percentuale del passo
 #   RIMOSSE perche' inutilizzate: y_cuts_normalized, primary_suction_view
 # ==============================================================================
 
@@ -41,6 +48,10 @@ reference_values:
   reference_area: 1.08      # Area frontale di riferimento A [m^2]: usata per CL = Df/(q*A) e CD = Tr/(q*A)
                             #   (CL*A e CD*A ne sono indipendenti, come deve essere)
   wheelbase: 1.535         # Passo vettura [m]
+  # Riferimenti degli assi lungo X [m]: se li dichiari, il report mostra il CoP
+  # anche in percentuale del passo (es. "42% del passo dal posteriore").
+  # front_axle_x: 0.00
+  # rear_axle_x: 1.535
   report_force_convention: "lift"
                             # Convenzione del report forze, come in Fluent:
                             #   "lift"      -> proiezione su +Y, deportanza NEGATIVA (default Fluent)

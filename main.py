@@ -29,6 +29,7 @@ from analyzer.assembly_rules import evaluate_design_issues
 from analyzer.ai_vision_advisor import generate_ai_vision_commentary
 from reporting.report_builder import build_diagnostic_reports
 from config_bridge import load_config as load_config_file
+from config_bridge import validate_config
 from file_discovery import NoCaseFilesFound
 from version import __version__
 
@@ -179,6 +180,8 @@ def main():
     args = parser.parse_args()
     cfg = load_config(args.config)
     print("[CONFIG] %s" % (LAST_CONFIG_PATH or "default interni (nessun config.yaml trovato)"))
+    for _warning in validate_config(cfg):
+        print("[CONFIG-WARN] %s" % _warning)
 
     if args.workspace:
         cfg["project"]["workspace_dir"] = args.workspace

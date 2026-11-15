@@ -1211,6 +1211,19 @@ def extract_real_mesh_and_cfd_data(
     cop_x_m = cop_weighted if cop_weighted is not None else 0.5 * (xmin_m + xmax_m)
     cop_x_pct = (cop_x_m - xmin_m) / L_m * 100.0
 
+    # CoP anche in percentuale del passo, se il config dichiara i due assi.
+    # Senza `front_axle_x`/`rear_axle_x` il KPI resta None e non compare nel report.
+    cop_wheelbase_pct = None
+    wheelbase_m = None
+    _front_axle = ref_values.get("front_axle_x")
+    _rear_axle = ref_values.get("rear_axle_x")
+    if isinstance(_front_axle, (int, float)) and isinstance(_rear_axle, (int, float)):
+        _span = float(_rear_axle) - float(_front_axle)
+        if abs(_span) > 1e-6:
+            cop_wheelbase_pct = (cop_x_m - float(_front_axle)) / _span * 100.0
+            _wb = ref_values.get("wheelbase")
+            wheelbase_m = float(_wb) if isinstance(_wb, (int, float)) else abs(_span)
+
     # Percentuale reale di area con flusso invertito / separazione dello strato limite (Tau_w,x <= 0)
     has_tau = np.max(np.abs(all_tau_wx)) > 1e-6
     stalled_mask_all = (all_tau_wx <= 0.0) if has_tau else (all_cp > 0.25)
@@ -1369,6 +1382,8 @@ def extract_real_mesh_and_cfd_data(
                 "l_d_total": round(ld_val, 2),
                 "cop_x_pct": round(cop_x_pct, 1),
                 "cop_x_m": round(cop_x_m, 3),
+                "cop_wheelbase_pct": round(cop_wheelbase_pct, 1) if cop_wheelbase_pct is not None else None,
+                "wheelbase_m": round(wheelbase_m, 3) if wheelbase_m is not None else None,
                 "stalled_surface_pct": round(stalled_surface_pct, 2),
                 "stalled_area_percentage": round(stalled_surface_pct, 2),
                 "peak_suction_cp": round(peak_suction_cp, 2),

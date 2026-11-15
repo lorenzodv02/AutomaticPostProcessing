@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.4.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.4.1
+python main.py --version      # FS-MetaPostDiag 1.5.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,16 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.5.0 — il config viene validato, e `wheelbase` serve davvero
+
+- **Validazione all'avvio** (`config_bridge.validate_config`): gli errori che prima passavano in silenzio ora producono un avviso `[CONFIG-WARN]` nel log (CLI e console della GUI). Controlli:
+  - `coordinate_system.*`: gli assi devono essere **X longitudinale, Y verticale, Z laterale** — se il file dichiara altro, i segni delle forze sarebbero sbagliati;
+  - `reference_values.*`: velocità, densità, area e passo devono essere **> 0**;
+  - `report_force_convention` deve essere `lift` o `downforce` (prima un valore ignoto veniva ignorato in silenzio);
+  - se `front_axle_x`/`rear_axle_x` ci sono, il passo dichiarato deve concordare entro il 5%.
+- **`wheelbase` non è più solo documentale**: dichiarando `front_axle_x` e `rear_axle_x` il report mostra il **CoP in percentuale del passo** (es. "0,444 m · 44,4% del passo"), che è il numero con cui si ragiona sul bilanciamento. Senza quei due valori il KPI non compare.
+- `fluent_variables` resta **dichiarativo** (il parser legge i campi per `sub_id`, non per nome): il config lo dice esplicitamente e la validazione ne controlla solo la forma.
 
 ### v1.4.1 — ricerca di META Post su qualunque PC
 
