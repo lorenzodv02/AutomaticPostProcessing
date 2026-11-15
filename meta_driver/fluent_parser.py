@@ -58,9 +58,11 @@ from config_bridge import (
 FORCE_CONVENTIONS = ("lift", "downforce")
 
 SIGN_CONVENTION_NOTE = (
-    "F = p_rel * A * n ; +Y verso l'alto ; convenzione 'lift': downforce_* e' la "
-    "proiezione su +Y (negativa = spinta verso il basso) ; convenzione 'downforce': "
-    "segno invertito (positiva = spinta verso il basso) ; drag_* = modulo"
+    "F = p_rel * A * n sulle normali del .cas ; drag_* = -F_x + viscosa (segno di Fluent) ; "
+    "downforce_* = +F_y + viscosa verticale. VERIFICATO su caso reale contro il report "
+    "'Forces' di Fluent con Direction Vector (0 -1 0): con la convenzione di default "
+    "('lift') i numeri sono POSITIVI per forze dirette verso il basso. La convenzione "
+    "'downforce' inverte il segno."
 )
 
 

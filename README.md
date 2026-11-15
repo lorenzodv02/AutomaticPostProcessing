@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.9.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.9.2-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.9.1
+python main.py --version      # FS-MetaPostDiag 1.9.2
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,10 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.9.2 — convenzione dei segni: documentazione corretta
+
+Verifica sul caso reale (FW5): con la convenzione di default (`report_force_convention: "lift"`) i numeri sono **positivi quando la forza è diretta verso il basso**, cioè identici a un report Fluent con `Direction Vector (0 -1 0)`. La documentazione di `config.yaml` diceva il contrario ed è stata corretta; nessun cambio di comportamento.
 
 ### v1.9.1 — segni delle forze allineati al report Fluent
 
