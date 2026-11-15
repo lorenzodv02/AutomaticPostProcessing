@@ -1,0 +1,227 @@
+# ==============================================================================
+# Configurazione Post-Processing CFD & Diagnostica Design (Formula Student)
+# Software: BETA CAE META Post + Python Vision & Aero Diagnostics
+# ==============================================================================
+
+project:
+  name: "Formula Student CFD Aero Diagnostics"
+  workspace_dir: "."
+  output_dir: "./output_diagnostics"
+  # Tipo di assieme: "undertray", "front_wing", "rear_wing", "full_car"
+  assembly_type: "undertray"
+
+# Convenzione sistema di riferimento (come specificato: X=Longitudinale dietro, Y=Verticale alto, Z=Laterale)
+coordinate_system:
+  longitudinal_axis: "X"   # Direzione del flusso indisturbato (+X verso il retrotreno)
+  vertical_axis: "Y"       # Direzione verticale (+Y verso l'alto, -Y deportanza/suzione)
+  lateral_axis: "Z"        # Direzione trasversale/spanwise (Z=0 piano di simmetria)
+  ground_level_y: 0.0      # Quota Y del suolo (m o mm, aggiornata automaticamente dal bounding box se auto_ground=true)
+  auto_ground: true
+
+# Condizioni di riferimento aerodinamiche (Formula Student tipiche: ~15-20 m/s)
+reference_values:
+  velocity_inf: 14      # Velocita' indisturbata [m/s] (60 km/h)
+  density_air: 1.225       # Densita' dell'aria [kg/m^3]
+  pressure_inf: 0.0        # Pressione statica di riferimento relativa [Pa]
+  viscosity_mu: 1.7894e-5  # Viscosita' dinamica [Pa*s]
+  reference_area: 1.08      # Area frontale di riferimento A [m^2] (per ricavare CL*A e CD*A)
+  wheelbase: 1.535         # Passo vettura [m]
+
+# Configurazione BETA CAE META Post
+meta:
+  # Percorso BETA CAE META Post v25.1 (o "auto" per ricerca automatica nei percorsi standard Windows)
+  executable_path: "auto"
+  batch_mode: true
+  image_width: 1920
+  image_height: 1080
+  background_color: "white"
+
+# Mappatura automatica dei nomi delle variabili nei file .cas/.dat di ANSYS Fluent
+fluent_variables:
+  static_pressure:
+    - "Pressure"
+    - "Static Pressure"
+    - "pressure"
+  pressure_coefficient:
+    - "Pressure Coefficient"
+    - "Cp"
+    - "pressure-coefficient"
+  total_pressure:
+    - "Total Pressure"
+    - "total-pressure"
+    - "Total Pressure Coefficient"
+  wall_shear_magnitude:
+    - "Wall Shear Stress"
+    - "Wall Shear"
+    - "wall-shear"
+    - "Skin Friction Coefficient"
+  wall_shear_x:
+    - "X-Wall Shear Stress"
+    - "X-Wall Shear"
+    - "x-wall-shear"
+  velocity_magnitude:
+    - "Velocity Magnitude"
+    - "velocity-magnitude"
+    - "Velocity"
+  velocity_x:
+    - "X-Velocity"
+    - "x-velocity"
+    - "Velocity_X"
+  turbulent_kinetic_energy:
+    - "Turbulent Kinetic Energy"
+    - "Turbulence Kinetic Energy"
+    - "k"
+    - "tke"
+  vorticity_magnitude:
+    - "Vorticity Magnitude"
+    - "vorticity-magnitude"
+    - "Q-Criterion"
+  y_plus:
+    - "Wall Yplus"
+    - "Yplus"
+    - "y-plus"
+
+# Profili specifici per i diversi assiemi aerodinamici (Undertray, Front Wing, Rear Wing, Full Car)
+assemblies:
+  undertray:
+    display_name: "Undertray / Fondo & Diffusore (Venturi)"
+    pid_keywords:
+      - "undertray"
+      - "floor"
+      - "diffuser"
+      - "venturi"
+      - "tray"
+      - "strake"
+      - "skid"
+      - "fondo"
+      - "tunnel"
+    exclude_keywords:
+      - "inlet"
+      - "outlet"
+      - "symmetry"
+      - "farfield"
+      - "ground"
+      - "road"
+      - "domain"
+      - "tunnel_wall"
+    # Stazioni normalizzate (0.0 = inizio anteriore/centro, 1.0 = fine posteriore/estremita' laterale)
+    x_cuts_normalized: [0.10, 0.25, 0.45, 0.65, 0.80, 0.92, 1.05]
+    z_cuts_normalized: [0.02, 0.20, 0.45, 0.70, 0.90]
+    y_cuts_normalized: [0.05, 0.15, 0.30]
+    cp_range: [-3.5, 1.0]
+    primary_suction_view: "bottom"   # -Y guarda verso +Y (lato inferiore aspirato)
+    thresholds:
+      max_acceptable_stall_pct: 8.0
+      critical_stall_pct: 18.0
+      min_suction_cp_warning: -3.2   # Picco di depressione troppo acuto -> rischio distacco nel diffusore
+      max_asymmetry_pct: 4.5
+      vortex_core_loss_threshold: 0.35
+
+  front_wing:
+    display_name: "Ala Anteriore (Front Wing)"
+    pid_keywords:
+      - "fw"
+      - "front_wing"
+      - "frontwing"
+      - "mainplane"
+      - "flap"
+      - "endplate"
+      - "footplate"
+      - "gurney"
+      - "nose"
+    exclude_keywords:
+      - "inlet"
+      - "outlet"
+      - "symmetry"
+      - "farfield"
+      - "ground"
+      - "road"
+      - "domain"
+    x_cuts_normalized: [0.15, 0.40, 0.65, 0.85, 1.00, 1.15, 1.35]
+    z_cuts_normalized: [0.05, 0.25, 0.50, 0.75, 0.92]
+    y_cuts_normalized: [0.10, 0.30, 0.60]
+    cp_range: [-4.0, 1.0]
+    primary_suction_view: "bottom"
+    thresholds:
+      max_acceptable_stall_pct: 6.0
+      critical_stall_pct: 14.0
+      min_suction_cp_warning: -3.8
+      max_asymmetry_pct: 3.5
+      vortex_core_loss_threshold: 0.30
+
+  rear_wing:
+    display_name: "Ala Posteriore (Rear Wing)"
+    pid_keywords:
+      - "rw"
+      - "rear_wing"
+      - "rearwing"
+      - "beam_wing"
+      - "swan"
+      - "drs"
+      - "mainplane"
+      - "flap"
+      - "endplate"
+    exclude_keywords:
+      - "inlet"
+      - "outlet"
+      - "symmetry"
+      - "farfield"
+      - "ground"
+      - "road"
+      - "domain"
+    x_cuts_normalized: [0.15, 0.45, 0.75, 0.95, 1.10, 1.30]
+    z_cuts_normalized: [0.05, 0.30, 0.60, 0.85, 0.95]
+    y_cuts_normalized: [0.20, 0.50, 0.80]
+    cp_range: [-3.8, 1.0]
+    primary_suction_view: "bottom"
+    thresholds:
+      max_acceptable_stall_pct: 10.0
+      critical_stall_pct: 20.0
+      min_suction_cp_warning: -3.6
+      max_asymmetry_pct: 4.0
+      vortex_core_loss_threshold: 0.40
+
+  full_car:
+    display_name: "Vettura Completa (Full Car Aero)"
+    pid_keywords:
+      - "wall"
+      - "car"
+      - "body"
+      - "chassis"
+      - "monocoque"
+      - "sidepod"
+      - "undertray"
+      - "wing"
+      - "wheel"
+      - "tire"
+      - "tyre"
+    exclude_keywords:
+      - "inlet"
+      - "outlet"
+      - "symmetry"
+      - "farfield"
+      - "ground"
+      - "road"
+      - "domain"
+      - "box"
+    x_cuts_normalized: [0.10, 0.25, 0.40, 0.55, 0.70, 0.85, 0.98, 1.10]
+    z_cuts_normalized: [0.02, 0.20, 0.40, 0.65, 0.85]
+    y_cuts_normalized: [0.05, 0.15, 0.35, 0.65]
+    cp_range: [-3.5, 1.0]
+    primary_suction_view: "bottom"
+    thresholds:
+      max_acceptable_stall_pct: 10.0
+      critical_stall_pct: 20.0
+      min_suction_cp_warning: -3.5
+      max_asymmetry_pct: 5.0
+      vortex_core_loss_threshold: 0.38
+
+# Configurazione Vision AI (Opzionale: Gemini o OpenAI per commento aerodinamico avanzato sulle foto)
+ai_vision:
+  enabled: true
+  provider: "gemini"       # "gemini" oppure "openai"
+  model_gemini: "gemini-3.8-flash"
+  model_openai: "gpt-4o"
+  # La chiave API puo' essere letta da variabile d'ambiente GEMINI_API_KEY / OPENAI_API_KEY o inserita qui/nella GUI
+  api_key: ""
+  language: "it"

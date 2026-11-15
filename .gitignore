@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.env
+.venv
+venv/
+ENV/
+
+# Large CFD files (mesh and solution binaries)
+*.cas
+*.dat
+*.cas.h5
+*.dat.h5
+*.cas.gz
+*.dat.gz
+*.msh
+
+# Zip archives and distribution packages
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+
+# Reports and generated media outputs
+Report_CFD_*.html
+CFD_Aero_Diagnostic_Report.html
+CFD_Aero_Diagnostic_Report.md
+Tabella_PID_Aerodinamica_*.xlsx
+meta_runtime_config.json
+output_diagnostics/
+output/
+images_raw/
+images_annotated/
+test_runs/
+scratch/
+01_slice_y.png
+02_slice_z.png
+
+# Logs
+*.log
+META_post.log
+pipeline.log
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
