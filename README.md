@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.7.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.7.1-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.7.0
+python main.py --version      # FS-MetaPostDiag 1.7.1
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,14 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.7.1 — "Verifica AI" anche dalla GUI
+
+La diagnostica era solo da riga di comando (`--ai-check`), che **non** viene eseguita durante un'analisi: chi lavora dalla GUI doveva uscire dall'app.
+
+- Nuovo pulsante **Verifica AI** nella card "Esecuzione META", sotto la API key: usa provider e chiave **attuali della GUI** (anche appena digitati) ed esegue in un thread la stessa diagnostica del comando: elenco modelli, avviso se il modello non c'è, chiamata minima con e senza thinking, messaggio esatto del server.
+- I risultati finiscono nella **console dell'app** con prefisso `[AI-VERIFICA]`; l'interfaccia non si blocca (thread + coda di log già thread-safe) e un doppio clic non duplica il controllo.
+- Durante l'analisi normale l'AI viene chiamata davvero e, se fallisce, il motivo resta nella console (`[INFO] … Dettaglio: …`) e nella nota del report.
 
 ### v1.7.0 — diagnosi dell'AI Vision e richieste più robuste
 

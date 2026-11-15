@@ -504,6 +504,7 @@ class AeroDiagnosticsGUI:
         self._t0 = 0.0
         self.log_queue = queue.Queue()
         self._icon = None
+        self._ai_check_running = False
 
         # ------------------------------------------------------------------ vars
         project = self.config.get("project", {})
@@ -834,6 +835,14 @@ class AeroDiagnosticsGUI:
             bg=SURFACE, fg=FAINT, font=(FONT_UI, 8), wraplength=370,
             justify="left",
         ).pack(anchor="w", pady=(8, 0))
+
+        # Il pulsante sta nella riga della chiave: cosi' resta visibile senza scorrere.
+        # Stessa diagnostica di `--ai-check`, senza uscire dall'app.
+        self.btn_ai_check = FlatButton(
+            key_row, "Verifica AI", command=self._check_ai_config,
+            kind="ghost", font=(FONT_UI, 8, "bold"),
+        )
+        self.btn_ai_check.pack(side=tk.LEFT, padx=(6, 0))
 
     # ------------------------------------------------------------------ right column
     def _build_action_card(self, parent):
@@ -1224,6 +1233,63 @@ class AeroDiagnosticsGUI:
         threading.Thread(
             target=self._run_task, args=(self.config, ws), daemon=True
         ).start()
+
+    # -------------------------------------------------------------- verifica AI
+    def _check_ai_config(self):
+        """
+        Esegue la diagnostica della configurazione AI (rete) in un thread.
+
+        Non usa il config salvato ma i valori attuali della GUI (provider e chiave
+        appena digitata), così si capisce subito se il problema è chiave, modello
+        o payload. I risultati finiscono nella console dell'app.
+        """
+        if self._ai_check_running:
+            return
+        provider = self.var_provider.get().strip().lower()
+        api_key = self.var_apikey.get().strip()
+        if not api_key and provider == "deepseek":
+            api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        ai_cfg = dict(self.config.get("ai_vision", {}) or {})
+        ai_cfg.update({"provider": provider, "api_key": api_key})
+        self._ai_check_running = True
+        self._log("[AI-VERIFICA] provider '%s' — controllo in corso..." % provider)
+        threading.Thread(target=self._run_ai_check, args=(ai_cfg,), daemon=True).start()
+
+    def _run_ai_check(self, ai_cfg: dict):
+        try:
+            from analyzer.ai_vision_advisor import deepseek_check
+
+            provider = str(ai_cfg.get("provider", "")).lower()
+            if provider != "deepseek":
+                self._log("[AI-VERIFICA] la diagnostica dettagliata copre il provider 'deepseek'; "
+                          "per '%s' controlla chiave e modello nel config." % provider)
+            info = deepseek_check(ai_cfg)
+            self._log("[AI-VERIFICA] endpoint: %s" % info["base_url"])
+            self._log("[AI-VERIFICA] modello richiesto: %s" % info["model"])
+            self._log("[AI-VERIFICA] chiave: %s" % (
+                "presente (" + info["key_masked"] + ")" if info["key_present"] else "ASSENTE"))
+            if info["models_error"]:
+                self._log("[AI-VERIFICA] errore su GET /models -> %s" % info["models_error"])
+            elif info["models"]:
+                self._log("[AI-VERIFICA] modelli disponibili: %s" % ", ".join(info["models"]))
+                if info["model_available"] is False:
+                    self._log("[AI-VERIFICA] ATTENZIONE: '%s' NON è tra i modelli disponibili."
+                              % info["model"])
+            else:
+                self._log("[AI-VERIFICA] GET /models non ha restituito modelli.")
+            if info["thinking_call"]:
+                self._log("[AI-VERIFICA] chiamata con thinking: %s" % info["thinking_call"])
+            if info["text_call"]:
+                self._log("[AI-VERIFICA] chiamata senza thinking: %s" % info["text_call"])
+            if info["models_error"] or (info["thinking_call"] and not info["thinking_call"].startswith("ok")):
+                self._log("[AI-VERIFICA] suggerimento: chiave di platform.deepseek.com, modello tra quelli "
+                          "elencati, credito disponibile.")
+            else:
+                self._log("[AI-VERIFICA] configurazione utilizzabile.")
+        except Exception as exc:
+            self._log("[AI-VERIFICA] errore imprevisto: %s" % exc)
+        finally:
+            self._ai_check_running = False
 
     def _run_task(self, cfg: dict, ws: str):
         import traceback
