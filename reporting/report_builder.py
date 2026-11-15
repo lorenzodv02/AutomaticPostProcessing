@@ -20,6 +20,35 @@ import zipfile
 import datetime
 
 
+_BRAND_MONOGRAM_CACHE = None
+
+
+def _brand_monogram_uri() -> str:
+    """
+    Monogramma UC in data-URI per l'header del report (stringa vuota se manca).
+
+    Il report deve restare un file unico e standalone: l'immagine viaggia
+    dentro l'HTML in Base64, come tutte le altre.
+    """
+    global _BRAND_MONOGRAM_CACHE
+    if _BRAND_MONOGRAM_CACHE is not None:
+        return _BRAND_MONOGRAM_CACHE
+    uri = ""
+    try:
+        import base64
+
+        from brand import asset_path
+
+        path = asset_path("uc-monogram-white.png")
+        if path:
+            with open(path, "rb") as handle:
+                uri = "data:image/png;base64," + base64.b64encode(handle.read()).decode("ascii")
+    except Exception:
+        uri = ""
+    _BRAND_MONOGRAM_CACHE = uri
+    return uri
+
+
 def _rel_path(target_path: str, base_dir: str) -> str:
     """Calcola il percorso relativo con forward slash per l'inclusione nell'HTML."""
     if not target_path:
@@ -268,7 +297,7 @@ def build_diagnostic_reports(
         pb = p.get("bbox", {})
         pb_str = f"X:[{pb.get('xmin',0):.2f},{pb.get('xmax',0):.2f}] Y:[{pb.get('ymin',0):.2f},{pb.get('ymax',0):.2f}] Z:[{pb.get('zmin',0):.2f},{pb.get('zmax',0):.2f}]"
         st_p = float(p.get("stalled_area_pct", 0.0))
-        st_col = "#ef4444" if st_p >= 8.0 else ("#f59e0b" if st_p >= 2.0 else "#22c55e")
+        st_col = "#E42320" if st_p >= 8.0 else ("#FDEB19" if st_p >= 2.0 else "#D8EEFC")
 
         pid_clean = str(p.get("zone_name", "")).split(":")[0].strip()
         df_2x = float(p.get("downforce_2x_N", float(p.get("fy_N", 0.0)) * 2.0))
@@ -290,20 +319,20 @@ def build_diagnostic_reports(
             "ld": ld_pid,
         })
 
-        df_col = "#38bdf8" if df_2x >= 0.0 else "#f59e0b"
+        df_col = "#FDEB19" if df_2x >= 0.0 else "#FDEB19"
         df_html = f'<strong style="color:{df_col};">{df_2x:.2f} N</strong>'
         if df_2x < 0.0:
-            df_html += ' <span style="font-size:0.75rem; color:#f59e0b; font-weight:normal;">(Portanza)</span>'
+            df_html += ' <span style="font-size:0.75rem; color:#FDEB19; font-weight:normal;">(Portanza)</span>'
 
         pid_rows_html.append(f"""
         <tr>
             <td><strong>{html.escape(pid_clean)}</strong></td>
             <td>{df_html}</td>
             <td>
-                <strong style="color:#f87171;">{dr_tot_2x:.2f} N</strong>
+                <strong style="color:#FF7A76;">{dr_tot_2x:.2f} N</strong>
                 <div style="font-size:0.75rem; color:var(--text-muted);">(P: {dr_p_2x:.2f} | V: {dr_v_2x:.2f})</div>
             </td>
-            <td><strong style="color:#22c55e;">{ld_pid:.2f}</strong></td>
+            <td><strong style="color:#D8EEFC;">{ld_pid:.2f}</strong></td>
             <td>{p['n_faces']:,}</td>
             <td>{p['area_m2'] * 2.0:.4f} m&sup2;</td>
             <td><code>{p['cp_min']:.2f}</code></td>
@@ -323,14 +352,14 @@ def build_diagnostic_reports(
         "ld": tot_ld_2x,
     })
     pid_rows_html.append(f"""
-        <tr style="background: rgba(56, 189, 248, 0.12); border-top: 2px solid #38bdf8;">
+        <tr style="background: rgba(253, 235, 25, 0.10); border-top: 2px solid #FDEB19;">
             <td><strong>TOTALE ASSIEME (x2)</strong></td>
-            <td><strong style="color:#38bdf8; font-size:1.0rem;">{sum_df_2x:.2f} N</strong></td>
+            <td><strong style="color:#FDEB19; font-size:1.0rem;">{sum_df_2x:.2f} N</strong></td>
             <td>
-                <strong style="color:#f87171; font-size:1.0rem;">{sum_dr_2x:.2f} N</strong>
+                <strong style="color:#FF7A76; font-size:1.0rem;">{sum_dr_2x:.2f} N</strong>
                 <div style="font-size:0.78rem; color:var(--text-muted); font-weight:normal;">(P: {sum_dr_p_2x:.2f} | V: {sum_dr_v_2x:.2f})</div>
             </td>
-            <td><strong style="color:#22c55e; font-size:1.0rem;">{tot_ld_2x:.2f}</strong></td>
+            <td><strong style="color:#D8EEFC; font-size:1.0rem;">{tot_ld_2x:.2f}</strong></td>
             <td colspan="6" style="color:var(--text-muted); font-size:0.84rem;">Valori complessivi Full-Car (inclusa componente viscosa + pressione)</td>
         </tr>
     """)
@@ -448,7 +477,12 @@ def build_diagnostic_reports(
         """
 
     ai_html_body = _md_to_simple_html(ai_review.get("commentary_markdown", ""))
-    stall_color = "#ef233c" if stall_val > 10.0 else ("#f77f00" if stall_val > 4.0 else "#22c55e")
+    stall_color = "#ef233c" if stall_val > 10.0 else ("#f77f00" if stall_val > 4.0 else "#D8EEFC")
+
+    monogram_uri = _brand_monogram_uri()
+    monogram_img = (
+        f'<img class="brand-mark" src="{monogram_uri}" alt="UniNa Corse" />' if monogram_uri else ""
+    )
 
     html_content = f"""<!DOCTYPE html>
 <html lang="it">
@@ -458,111 +492,142 @@ def build_diagnostic_reports(
     <title>Report Diagnostico CFD Verificato - {html.escape(asm_display)}</title>
     <style>
         :root {{
-            --bg-dark: #0f172a;
-            --bg-card: #1e293b;
-            --bg-card-alt: #263449;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --accent-blue: #38bdf8;
-            --accent-green: #22c55e;
-            --accent-amber: #f59e0b;
-            --accent-red: #ef4444;
-            --border-col: #334155;
+            /* Brand identity UniNa Corse */
+            --navy: #11255C;
+            --navy-deep: #0B1B47;
+            --navy-panel: #163079;
+            --violet: #5B2581;
+            --violet-soft: #A094C5;
+            --gold: #FDEB19;
+            --ice: #D8EEFC;
+            --danger: #E42320;
+
+            --bg-dark: var(--navy-deep);
+            --bg-card: var(--navy);
+            --bg-card-alt: var(--navy-panel);
+            --text-main: #FFFFFF;
+            --text-muted: #7E94B4;
+            --accent: var(--gold);
+            --border-col: #2A3D6E;
+
+            /* alias storici: gli stili inline esistenti continuano a funzionare */
+            --accent-blue: var(--gold);
+            --accent-green: var(--ice);
+            --accent-amber: var(--gold);
+            --accent-red: var(--danger);
         }}
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-family: 'Roboto', 'Roboto Condensed', 'Segoe UI', system-ui, -apple-system, sans-serif;
             background-color: var(--bg-dark);
             color: var(--text-main);
             line-height: 1.6;
-            padding: 24px 36px;
+            padding: 32px 40px;
+            -webkit-font-smoothing: antialiased;
         }}
         .top-bar {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            border: 1px solid var(--border-col);
-            border-left: 6px solid var(--accent-green);
-            border-radius: 12px;
-            padding: 22px 28px;
-            margin-bottom: 26px;
+            gap: 22px;
+            background: var(--bg-card);
+            border: none;
+            border-radius: 20px;
+            padding: 26px 30px;
+            margin-bottom: 22px;
         }}
-        .top-bar h1 {{ font-size: 1.6rem; color: #ffffff; margin-bottom: 6px; }}
-        .top-bar .subtitle {{ color: var(--text-muted); font-size: 0.95rem; }}
-        .coord-badge {{
-            background: #0284c7;
-            color: white;
-            padding: 6px 14px;
-            border-radius: 6px;
-            font-size: 0.85rem;
+        .brand {{ display: flex; align-items: center; gap: 20px; }}
+        .brand-mark {{ height: 48px; width: auto; display: block; }}
+        .brand-text h1 {{ font-size: 1.42rem; font-weight: 700; color: #fff; margin-bottom: 5px; }}
+        .top-bar .subtitle {{ color: var(--text-muted); font-size: 0.9rem; }}
+        .chip-row {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 13px; }}
+        .coord-badge, .verified-badge {{
+            background: transparent;
+            color: var(--ice);
+            border: 1px solid rgba(216, 238, 252, 0.28);
+            padding: 5px 13px;
+            border-radius: 999px;
+            font-size: 0.78rem;
             font-weight: 600;
             display: inline-block;
-            margin-top: 8px;
         }}
-        .verified-badge {{
-            background: #16a34a;
-            color: white;
-            padding: 6px 14px;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            font-weight: 700;
-            display: inline-block;
-            margin-top: 8px;
-            margin-left: 8px;
-        }}
+        .verified-badge {{ color: var(--gold); border-color: rgba(253, 235, 25, 0.45); }}
         .btn-print {{
-            background: var(--accent-blue);
-            color: #0f172a;
+            background: var(--gold);
+            color: var(--navy-deep);
             border: none;
-            padding: 10px 18px;
-            border-radius: 8px;
+            padding: 12px 24px;
+            border-radius: 999px;
             font-weight: 700;
+            font-size: 0.9rem;
             cursor: pointer;
-            font-size: 0.92rem;
+            white-space: nowrap;
         }}
+        .btn-print:hover {{ background: #FFF06B; }}
         .kpi-grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 14px;
+            margin-bottom: 26px;
         }}
         .kpi-card {{
             background: var(--bg-card);
-            border: 1px solid var(--border-col);
-            border-radius: 10px;
-            padding: 16px 20px;
+            border: none;
+            border-radius: 16px;
+            padding: 18px 22px;
         }}
-        .kpi-label {{ color: var(--text-muted); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; }}
-        .kpi-value {{ font-size: 1.7rem; font-weight: 800; margin: 6px 0 2px 0; color: var(--accent-blue); }}
-        .kpi-sub {{ font-size: 0.82rem; color: #cbd5e1; }}
+        .kpi-label {{
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 700;
+        }}
+        .kpi-value {{ font-size: 1.85rem; font-weight: 800; margin: 8px 0 3px 0; color: var(--gold); }}
+        .kpi-sub {{ font-size: 0.8rem; color: var(--text-muted); }}
         .section-box {{
             background: var(--bg-card);
-            border: 1px solid var(--border-col);
-            border-radius: 12px;
-            padding: 24px 28px;
-            margin-bottom: 30px;
+            border: none;
+            border-radius: 20px;
+            padding: 26px 30px;
+            margin-bottom: 22px;
         }}
         .section-title {{
-            font-size: 1.3rem;
-            border-bottom: 2px solid var(--border-col);
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-            color: #ffffff;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #fff;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 18px;
+            padding: 0;
+            border-bottom: none;
         }}
+        .section-title::before {{
+            content: "";
+            display: inline-block;
+            width: 3px;
+            height: 18px;
+            background: var(--gold);
+            border-radius: 2px;
+            margin-right: 12px;
+            flex: 0 0 auto;
+        }}
+        .section-title > span:first-child {{ flex: 1 1 auto; }}
+        .section-title > div {{ flex: 0 0 auto; }}
+        .section-title button {{ white-space: nowrap; }}
+        .section-title .badge {{ margin-left: auto; }}
         .issue-card {{
             background: var(--bg-card-alt);
-            border-radius: 10px;
+            border-radius: 16px;
             padding: 20px 24px;
-            margin-bottom: 18px;
-            border-left: 6px solid var(--accent-blue);
+            margin-bottom: 16px;
+            border-left: 3px solid var(--gold);
         }}
-        .issue-critical {{ border-left-color: var(--accent-red); }}
-        .issue-warning {{ border-left-color: var(--accent-amber); }}
-        .issue-info {{ border-left-color: var(--accent-green); }}
+        .issue-critical {{ border-left-color: var(--danger); }}
+        .issue-warning {{ border-left-color: var(--gold); }}
+        .issue-info {{ border-left-color: var(--violet-soft); }}
         .issue-header {{
             display: flex;
             justify-content: space-between;
@@ -572,44 +637,54 @@ def build_diagnostic_reports(
             margin-bottom: 12px;
         }}
         .badge {{
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 0.78rem;
+            padding: 3px 11px;
+            border-radius: 999px;
+            font-size: 0.72rem;
             font-weight: 800;
             margin-right: 8px;
+            letter-spacing: 0.03em;
+            border: 1px solid transparent;
         }}
-        .badge-critical {{ background: var(--accent-red); color: white; }}
-        .badge-warning {{ background: var(--accent-amber); color: #0f172a; }}
-        .badge-info {{ background: var(--accent-green); color: #0f172a; }}
-        .issue-id {{ color: var(--text-muted); font-family: monospace; font-size: 0.9rem; }}
-        .issue-title {{ display: inline; font-size: 1.15rem; margin-left: 8px; color: #ffffff; }}
-        .issue-loc {{ background: #0f172a; padding: 5px 12px; border-radius: 6px; font-size: 0.84rem; color: #38bdf8; font-family: monospace; }}
-        .issue-body p {{ margin-bottom: 10px; font-size: 0.95rem; }}
-        .highlight-ref {{ color: #fde047; font-weight: 600; }}
-        .impact-text {{ color: #fca5a5; font-weight: 600; }}
+        .badge-critical {{ background: rgba(228, 35, 32, 0.16); color: #FF7A76; border-color: rgba(228, 35, 32, 0.45); }}
+        .badge-warning  {{ background: rgba(253, 235, 25, 0.14); color: var(--gold); border-color: rgba(253, 235, 25, 0.40); }}
+        .badge-info     {{ background: rgba(160, 148, 197, 0.18); color: var(--violet-soft); border-color: rgba(160, 148, 197, 0.40); }}
+        .issue-id {{ color: var(--text-muted); font-family: 'Roboto Condensed', ui-monospace, monospace; font-size: 0.82rem; }}
+        .issue-title {{ display: inline; font-size: 1.05rem; margin-left: 8px; color: #fff; font-weight: 700; }}
+        .issue-loc {{
+            background: var(--navy-deep);
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            color: var(--ice);
+            font-family: 'Roboto Condensed', ui-monospace, monospace;
+            display: inline-block;
+        }}
+        .issue-body p {{ margin-bottom: 10px; font-size: 0.93rem; }}
+        .highlight-ref {{ color: var(--gold); font-weight: 600; }}
+        .impact-text {{ color: #FF9A9A; font-weight: 600; }}
         .cad-actions-box {{
-            background: rgba(15, 23, 42, 0.65);
-            border: 1px solid #475569;
-            border-radius: 8px;
+            background: rgba(11, 27, 71, 0.55);
+            border: 1px solid var(--border-col);
+            border-radius: 12px;
             padding: 14px 18px;
             margin-top: 12px;
         }}
         .cad-actions-box ul {{ margin-left: 20px; margin-top: 8px; }}
-        .cad-actions-box li {{ margin-bottom: 6px; color: #e2e8f0; }}
+        .cad-actions-box li {{ margin-bottom: 6px; color: var(--ice); }}
         .photo-grid {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
-            gap: 22px;
+            gap: 20px;
         }}
         .photo-card {{
             background: var(--bg-card-alt);
-            border: 1px solid var(--border-col);
-            border-radius: 10px;
+            border: none;
+            border-radius: 16px;
             overflow: hidden;
         }}
         .photo-header {{
             padding: 14px 18px;
-            background: #0f172a;
+            background: rgba(11, 27, 71, 0.45);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -617,39 +692,40 @@ def build_diagnostic_reports(
             gap: 10px;
         }}
         .cat-pill {{
-            font-size: 0.72rem;
-            background: #334155;
-            color: #38bdf8;
-            padding: 2px 8px;
-            border-radius: 4px;
+            font-size: 0.68rem;
+            background: rgba(253, 235, 25, 0.12);
+            color: var(--gold);
+            padding: 2px 9px;
+            border-radius: 999px;
             font-weight: 700;
             display: inline-block;
             margin-bottom: 4px;
+            letter-spacing: 0.04em;
         }}
         .photo-controls {{ display: flex; gap: 6px; }}
         .btn-toggle {{
-            background: #1e293b;
-            color: #cbd5e1;
-            border: 1px solid #475569;
-            padding: 5px 10px;
-            border-radius: 5px;
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border-col);
+            padding: 5px 12px;
+            border-radius: 999px;
             cursor: pointer;
-            font-size: 0.78rem;
+            font-size: 0.76rem;
             font-weight: 600;
         }}
         .btn-toggle.active {{
-            background: var(--accent-blue);
-            color: #0f172a;
-            border-color: var(--accent-blue);
+            background: var(--gold);
+            color: var(--navy-deep);
+            border-color: var(--gold);
         }}
         .photo-img-wrapper {{
-            background: #0f172a;
+            background: var(--navy-deep);
             text-align: center;
-            border-bottom: 1px solid var(--border-col);
+            border-bottom: none;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 8px;
+            padding: 10px;
             min-height: 260px;
         }}
         .photo-img-wrapper img {{
@@ -660,53 +736,84 @@ def build_diagnostic_reports(
             object-fit: contain;
             display: block;
             margin: 0 auto;
-            border-radius: 4px;
+            border-radius: 8px;
         }}
         .photo-footer {{ padding: 14px 18px; }}
-        .photo-desc {{ font-size: 0.88rem; color: #cbd5e1; margin-bottom: 8px; }}
-        .photo-findings {{ margin-left: 18px; font-size: 0.86rem; color: #fde047; }}
+        .photo-desc {{ font-size: 0.86rem; color: var(--ice); margin-bottom: 8px; }}
+        .photo-findings {{ margin-left: 18px; font-size: 0.84rem; color: var(--gold); }}
         .plot-grid {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
-            gap: 22px;
+            gap: 20px;
         }}
         .plot-card {{
             background: var(--bg-card-alt);
-            border: 1px solid var(--border-col);
-            border-radius: 10px;
+            border: none;
+            border-radius: 16px;
             padding: 16px;
         }}
-        .plot-card h4 {{ margin-bottom: 10px; color: #ffffff; }}
-        .plot-card img {{ width: 100%; border-radius: 6px; background: white; margin-bottom: 10px; }}
-        .plot-card p {{ font-size: 0.88rem; color: #cbd5e1; }}
-        .ai-review-content h3.ai-subtitle {{ color: var(--accent-blue); margin: 18px 0 10px 0; font-size: 1.15rem; }}
+        .plot-card h4 {{ margin-bottom: 10px; color: #fff; font-size: 0.98rem; }}
+        .plot-card img {{ width: 100%; border-radius: 10px; background: white; margin-bottom: 10px; }}
+        .plot-card p {{ font-size: 0.86rem; color: var(--text-muted); }}
+        .ai-review-content h3.ai-subtitle {{ color: var(--gold); margin: 18px 0 10px 0; font-size: 1.05rem; }}
         .ai-review-content ul.ai-list {{ margin-left: 22px; margin-bottom: 14px; }}
         .ai-review-content li {{ margin-bottom: 8px; }}
-        .inline-code {{ background: #0f172a; color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-family: monospace; }}
+        .inline-code {{
+            background: var(--navy-deep);
+            color: var(--ice);
+            padding: 2px 7px;
+            border-radius: 6px;
+            font-family: 'Roboto Condensed', ui-monospace, monospace;
+            font-size: 0.86rem;
+        }}
         .section-divider {{ border: none; border-top: 1px solid var(--border-col); margin: 18px 0; }}
-        .meta-info-table {{ width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-top: 8px; }}
-        .meta-info-table td, .meta-info-table th {{ border: 1px solid var(--border-col); padding: 8px 12px; text-align: left; }}
-        .meta-info-table th {{ background: #0f172a; color: var(--accent-blue); }}
+        .meta-info-table {{ width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.86rem; margin-top: 8px; }}
+        .meta-info-table th {{
+            background: transparent;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-col);
+        }}
+        .meta-info-table td {{
+            padding: 11px 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(42, 61, 110, 0.55);
+            color: var(--ice);
+            vertical-align: top;
+        }}
+        .meta-info-table tbody tr:hover td {{ background: rgba(22, 48, 121, 0.35); }}
+        code {{ font-family: 'Roboto Condensed', ui-monospace, monospace; color: var(--gold); }}
         @media print {{
-            body {{ background: white; color: black; padding: 10px; }}
+            body {{ background: #fff; color: #111; padding: 10px; }}
             .btn-print, .photo-controls {{ display: none; }}
             .section-box, .kpi-card, .issue-card, .photo-card, .plot-card {{
-                background: white; color: black; border: 1px solid #ccc; page-break-inside: avoid;
+                background: #fff; color: #111; border: 1px solid #ccc; page-break-inside: avoid;
             }}
+            .kpi-value, .highlight-ref, code {{ color: #6B5B00; }}
         }}
     </style>
 </head>
 <body>
 
     <div class="top-bar">
-        <div>
-            <h1>Dossier Diagnostico CFD Verificato su Mesh &amp; Campi Reali (.CAS / .DAT + META Post)</h1>
-            <div class="subtitle">Assieme: <strong>{html.escape(asm_display)}</strong> | Generato il: {now_str} | File: <code>{html.escape(os.path.basename(cas_file))}</code></div>
-            <div class="coord-badge">Assi Veicolo: X = Longitudinale (dietro) &bull; Y = Verticale (alto) &bull; Z = Laterale (Z=0 simmetria)</div>
-            <div class="verified-badge">&#10003; {pdata.get('nodes_read', 0):,} Nodi 3D &amp; {pdata.get('faces_read', 0):,} Facce Reali Verificate</div>
+        <div class="brand">
+            {monogram_img}
+            <div class="brand-text">
+                <h1>Dossier Diagnostico CFD</h1>
+                <div class="subtitle">Assieme: <strong>{html.escape(asm_display)}</strong> &middot; generato il {now_str} &middot; <code>{html.escape(os.path.basename(cas_file))}</code></div>
+                <div class="chip-row">
+                    <span class="coord-badge">X = Longitudinale &middot; Y = Verticale &middot; Z = Laterale (Z=0 simmetria)</span>
+                    <span class="verified-badge">&#10003; {pdata.get('nodes_read', 0):,} nodi &amp; {pdata.get('faces_read', 0):,} facce reali verificate</span>
+                </div>
+            </div>
         </div>
         <div>
-            <button class="btn-print" onclick="window.print()">Stampa / Salva Report PDF</button>
+            <button class="btn-print" onclick="window.print()">Stampa / Salva PDF</button>
         </div>
     </div>
 
@@ -724,7 +831,7 @@ def build_diagnostic_reports(
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Efficienza Aerodinamica (L/D)</div>
-            <div class="kpi-value" style="color: #22c55e;">{l_d:.2f}</div>
+            <div class="kpi-value" style="color: #D8EEFC;">{l_d:.2f}</div>
             <div class="kpi-sub">Rapporto CL / CD sull'assieme</div>
         </div>
         <div class="kpi-card">
@@ -749,7 +856,7 @@ def build_diagnostic_reports(
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Indice Coerenza Flusso</div>
-            <div class="kpi-value" style="color: #38bdf8;">{vortex_stab:.1f}%</div>
+            <div class="kpi-value" style="color: #FDEB19;">{vortex_stab:.1f}%</div>
             <div class="kpi-sub">Frazione superficie con flusso attaccato</div>
         </div>
     </div>
@@ -782,8 +889,8 @@ def build_diagnostic_reports(
             <span>1. Riparto Quantitativo Reale per Singolo Componente / PID ({html.escape(asm_display)}) - Valori Full-Car (x2)</span>
             <div style="display:flex; align-items:center; gap:12px;">
                 <span style="font-size: 0.88rem; color: var(--text-muted);">{len(pid_breakdown)} PID unificate</span>
-                <button onclick="exportPidExcel()" style="background: #22c55e; color: #0f172a; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.88rem; cursor: pointer; box-shadow: 0 2px 8px rgba(34,197,94,0.35);">
-                    &#128202; Esporta Tabella in Excel (.xlsx) [Valori x2]
+                <button onclick="exportPidExcel()" style="background: transparent; color: var(--gold); border: 1px solid rgba(253,235,25,0.45); padding: 8px 18px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">
+                    Esporta tabella in Excel (.xlsx) &middot; valori x2
                 </button>
             </div>
         </div>
@@ -878,8 +985,8 @@ def build_diagnostic_reports(
     <!-- LIGHTBOX MODAL PER ZOOM IMMAGINI STANDALONE -->
     <div id="lightboxModal" onclick="closeLightbox()" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15,23,42,0.92); align-items:center; justify-content:center; flex-direction:column; padding:24px; cursor:zoom-out;">
         <div id="lightboxCaption" style="color:#f8fafc; font-size:1.05rem; font-weight:700; margin-bottom:12px; text-align:center;"></div>
-        <img id="lightboxImg" src="" alt="" style="max-width:95vw; max-height:85vh; border-radius:8px; border:2px solid #38bdf8; box-shadow:0 12px 40px rgba(0,0,0,0.7);"/>
-        <div style="color:#94a3b8; font-size:0.85rem; margin-top:10px;">Clicca ovunque per chiudere lo zoom</div>
+        <img id="lightboxImg" src="" alt="" style="max-width:95vw; max-height:85vh; border-radius:8px; border:2px solid #FDEB19; box-shadow:0 12px 40px rgba(0,0,0,0.7);"/>
+        <div style="color:#7E94B4; font-size:0.85rem; margin-top:10px;">Clicca ovunque per chiudere lo zoom</div>
     </div>
 
     <script>

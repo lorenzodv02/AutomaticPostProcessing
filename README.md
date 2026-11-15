@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.2.0
+python main.py --version      # FS-MetaPostDiag 1.3.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,19 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.3.0 — report HTML in brand identity
+
+Il dossier HTML usava ancora il tema precedente (slate/ciano/verde, `Segoe UI`, gradienti). Ora segue la stessa brand identity dell'interfaccia.
+
+- **Palette di brand**: navy `#11255C` per le card, `#0B1B47` per il fondo, giallo `#FDEB19` per accenti e KPI, azzurro `#d8eefc` per il testo secondario, viola `#5B2581` per le informazioni, rosso `#E42320` per gli errori.
+- **Header con il monogramma UC** incorporato in Base64: il report resta un file unico e standalone.
+- **Card senza bordi e arrotondate**, titoli di sezione con barretta d'accento, KPI a 1.85 rem.
+- **Badge a pillola** con sfondo tinto (PASS/FAIL/CRITICAL/WARNING/INFO) invece dei blocchi pieni saturi.
+- Pulsanti: primario giallo a pillola, secondari outline (`Esporta tabella in Excel`).
+- Tabelle con intestazioni in maiuscoletto attenuato e separatori sottili, riga totale con tinta gialla.
+- Font stack `Roboto` con fallback di sistema (il report non incorpora i font per non gonfiare il file).
+- Regole `@media print` aggiornate: su carta resta leggibile in bianco e nero.
 
 ### v1.2.0 — restyling moderno dell'interfaccia
 
