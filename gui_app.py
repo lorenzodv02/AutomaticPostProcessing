@@ -21,6 +21,9 @@ import webbrowser
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
+import brand
+from brand import asset_path as brand_asset
+from brand import families as brand_families
 from meta_driver.launcher import find_meta_executable
 from file_discovery import try_discover
 from meta_driver.fluent_parser import inspect_fluent_cas_zones
@@ -29,25 +32,33 @@ from meta_driver.fluent_parser import inspect_fluent_cas_zones
 # ==============================================================================
 #  PALETTE & COSTANTI
 # ==============================================================================
-BG          = "#0a1220"
-SURFACE     = "#101c2f"
-SURFACE_ALT = "#17253c"
-INPUT_BG    = "#0b1728"
-BORDER      = "#22344f"
-BORDER_SOFT = "#1a2a42"
-TEXT        = "#e8eef8"
-TEXT_SOFT   = "#c3d2e5"
-MUTED       = "#8ba0bb"
-FAINT       = "#5c708a"
-ACCENT      = "#38bdf8"
-ACCENT_DARK = "#0ea5e9"
-INDIGO      = "#6366f1"
-SUCCESS     = "#34d399"
-WARNING     = "#fbbf24"
-DANGER      = "#f87171"
+# Palette brand UniNa Corse: #11255C (navy) · #5B2581 (viola) ·
+# #FDEB19 (giallo) · #d8eefc (azzurro). Le sfumature sono mescolanze documentate
+# in brand.py. I nomi delle costanti restano quelli storici, cosi' ogni widget
+# continua a funzionare senza altre modifiche.
+BG          = brand.NAVY_DEEP      # fondo applicazione
+SURFACE     = brand.NAVY           # card
+SURFACE_ALT = brand.NAVY_PANEL     # superfici secondarie (rampa brand)
+INPUT_BG    = brand.INPUT_BG
+BORDER      = brand.BORDER
+BORDER_SOFT = brand.BORDER_SOFT
+TEXT        = brand.WHITE
+TEXT_SOFT   = brand.ICE
+MUTED       = brand.TEXT_MUTED
+FAINT       = brand.TEXT_FAINT
+ACCENT      = brand.GOLD           # accento primario: CTA, valori, bordi attivi
+ACCENT_DARK = brand.GOLD_DEEP      # base dei gradienti gialli
+INDIGO      = brand.VIOLET         # accento secondario
+SUCCESS     = brand.ICE
+WARNING     = brand.GOLD
+DANGER      = brand.DANGER
+VIOLET_SOFT = brand.VIOLET_SOFT
 
-FONT_UI    = "Segoe UI"
-FONT_MONO  = "Consolas"
+# Roboto (SIL OFL) incluso in assets/fonts e registrato come font privato del
+# processo; senza i file si ricade sui font di sistema.
+_FAMILIES = brand_families()
+FONT_UI    = _FAMILIES["ui"]
+FONT_MONO  = _FAMILIES["num"]
 
 ASSEMBLY_LABELS = {
     "undertray":  "Undertray · Fondo & Diffusore",
@@ -123,7 +134,7 @@ class GradientButton(tk.Canvas):
     """Pulsante principale con gradiente, stati hover/disabled e angoli morbidi."""
 
     def __init__(self, master, text, command, width=340, height=48,
-                 c1=ACCENT_DARK, c2=INDIGO, fg="#ffffff",
+                 c1=ACCENT_DARK, c2=ACCENT, fg=brand.NAVY,
                  font=(FONT_UI, 10, "bold"), **kwargs):
         super().__init__(master, width=width, height=height, bd=0,
                          highlightthickness=0, bg=master.cget("bg"), **kwargs)
@@ -149,7 +160,7 @@ class GradientButton(tk.Canvas):
         w = self.winfo_width() if self.winfo_width() > 1 else self._pw
         h = self.winfo_height() if self.winfo_height() > 1 else self._ph
         if not self._enabled:
-            c1, c2, fg = "#2a3a4f", "#37475f", "#7f93ad"
+            c1, c2, fg = SURFACE_ALT, mix_color(SURFACE_ALT, ICE, 0.10), FAINT
         elif self._hover:
             c1, c2, fg = lighten(self._c1, 0.14), lighten(self._c2, 0.14), self._fg
         elif self._pressed:
@@ -199,9 +210,10 @@ class GradientButton(tk.Canvas):
 class FlatButton(tk.Button):
     """Pulsante secondario piatto con hover e stato disabilitato coerente col tema."""
 
+    # Tinte di brand: il viola e' l'azione secondaria, il navy la superficie
     _PALETTES = {
-        "secondary": (SURFACE_ALT, TEXT_SOFT, "#223650"),
-        "success":   ("#123b2a", "#6ee7b7", "#17553a"),
+        "secondary": (SURFACE_ALT, TEXT_SOFT, brand.VIOLET),
+        "success":   (brand.VIOLET, TEXT_SOFT, brand.VIOLET_RAMP[1]),
         "ghost":     (SURFACE, MUTED, SURFACE_ALT),
     }
 
@@ -264,10 +276,45 @@ class StatusPill(tk.Canvas):
         self._draw()
 
 
-class GradientStrip(tk.Canvas):
-    """Sottile linea decorativa a gradiente orizzontale."""
+class _BrandBars(tk.Canvas):
+    """Le tre barre oblique del brand (giallo, viola, azzurro) come firma grafica."""
 
-    def __init__(self, master, height=3):
+    COLORS = ((ACCENT, 46), (INDIGO, 26), (TEXT_SOFT, 8))
+
+    def __init__(self, master, width=140, height=46):
+        super().__init__(master, width=width, height=height, bd=0,
+                         highlightthickness=0, bg=master.cget("bg"))
+        # ATTENZIONE: `_w` e `_h` sono attributi interni di Tkinter (path del
+        # widget): vanno usati nomi propri, altrimenti pack() riceve un intero.
+        self._base_w, self._base_h = width, height
+        self.bind("<Configure>", self._draw)
+
+    def _draw(self, _e=None):
+        self.delete("all")
+        w = self.winfo_width() or self._base_w
+        h = self.winfo_height() or self._base_h
+        slant = h * 0.45
+        for color, offset in self.COLORS:
+            x = w - offset
+            self.create_polygon(
+                x, h, x + 8, h, x + 8 + slant, h * 0.10, x + slant, h * 0.10,
+                fill=color, outline="",
+            )
+
+
+class GradientStrip(tk.Canvas):
+    """
+    Striscia sotto l'header con il segno grafico del brand.
+
+    Ripete le barre oblique giallo/viola/navy/azzurro: sono disegnate su Canvas,
+    quindi non serve includere nessuna immagine nel pacchetto.
+    """
+
+    BARS = ((ACCENT, 0.00), (INDIGO, 0.22), (SURFACE_ALT, 0.40), (TEXT_SOFT, 0.48))
+    PERIOD = 240
+    BAR_W = 5
+
+    def __init__(self, master, height=6):
         super().__init__(master, height=height, bd=0, highlightthickness=0,
                          bg=master.cget("bg"))
         self._strip_h = height
@@ -275,10 +322,22 @@ class GradientStrip(tk.Canvas):
 
     def _draw(self, _e=None):
         self.delete("all")
-        w = self.winfo_width()
-        for x in range(w):
-            self.create_line(x, 0, x, self._strip_h,
-                             fill=mix_color(ACCENT, INDIGO, x / max(w - 1, 1)))
+        width = max(self.winfo_width(), 1)
+        if width <= 1:
+            return
+        h = self._strip_h
+        slant = h * 1.4
+        self.create_rectangle(0, 0, width, h, fill=BG, outline="")
+        x = -self.PERIOD
+        while x < width + self.PERIOD:
+            for color, offset in self.BARS:
+                x0 = x + offset * self.PERIOD
+                self.create_polygon(
+                    x0, h, x0 + self.BAR_W, h,
+                    x0 + self.BAR_W + slant, 0, x0 + slant, 0,
+                    fill=color, outline="",
+                )
+            x += self.PERIOD
 
 
 class ScrollableFrame(tk.Frame):
@@ -449,14 +508,16 @@ class AeroDiagnosticsGUI:
             selectforeground=[("readonly", TEXT)],
             bordercolor=[("focus", ACCENT)],
         )
+        # Scrollbar sottile in tinta brand: thumb viola, giallo allo hover
         style.configure(
             "Modern.Vertical.TScrollbar",
-            background=SURFACE_ALT, troughcolor=BG, bordercolor=BG,
-            arrowcolor=MUTED, darkcolor=SURFACE_ALT, lightcolor=SURFACE_ALT,
-            width=10, relief="flat",
+            background=INDIGO, troughcolor=SURFACE, bordercolor=SURFACE,
+            arrowcolor=TEXT_SOFT, darkcolor=INDIGO, lightcolor=INDIGO,
+            width=8, arrowsize=10, relief="flat",
         )
         style.map("Modern.Vertical.TScrollbar",
-                  background=[("active", BORDER)], arrowcolor=[("active", TEXT)])
+                  background=[("active", ACCENT), ("pressed", ACCENT)],
+                  arrowcolor=[("active", brand.NAVY)])
         style.configure(
             "Accent.Horizontal.TProgressbar",
             troughcolor=SURFACE_ALT, background=ACCENT, bordercolor=SURFACE_ALT,
@@ -465,11 +526,40 @@ class AeroDiagnosticsGUI:
         self.root.option_add("*TCombobox*Listbox.background", SURFACE)
         self.root.option_add("*TCombobox*Listbox.foreground", TEXT)
         self.root.option_add("*TCombobox*Listbox.selectBackground", ACCENT_DARK)
-        self.root.option_add("*TCombobox*Listbox.selectForeground", "#04121f")
+        self.root.option_add("*TCombobox*Listbox.selectForeground", BG)
         self.root.option_add("*TCombobox*Listbox.font", f"{{{FONT_UI}}} 10")
 
+    def _load_image(self, name, height):
+        """
+        Carica una PNG di `assets/` ridimensionata in altezza.
+
+        Restituisce None se la risorsa o Pillow non sono disponibili: l'UI deve
+        funzionare anche senza immagini.
+        """
+        path = brand_asset(name)
+        if not path:
+            return None
+        try:
+            from PIL import Image, ImageTk
+
+            image = Image.open(path)
+            ratio = float(height) / max(image.height, 1)
+            size = (max(1, int(round(image.width * ratio))), int(height))
+            photo = ImageTk.PhotoImage(image.resize(size, Image.LANCZOS))
+            return photo
+        except Exception:
+            return None
+
     def _make_window_icon(self):
-        """Icona 32x32 generata a runtime (nessun file esterno richiesto)."""
+        """Icona della finestra: l'icona di brand, con segnaposto se manca."""
+        icon = self._load_image("FS-MetaPostDiag.png", 64)
+        if icon is not None:
+            try:
+                self.root.iconphoto(True, icon)
+                self._icon = icon
+                return
+            except Exception:
+                pass
         try:
             size, radius = 32, 7
             img = tk.PhotoImage(width=size, height=size)
@@ -519,45 +609,40 @@ class AeroDiagnosticsGUI:
         self._build_footer()
 
     def _build_header(self):
-        header = tk.Frame(self.root, bg="#0d1829")
+        header = tk.Frame(self.root, bg=BG)
         header.pack(fill=tk.X)
 
-        inner = tk.Frame(header, bg="#0d1829", padx=22, pady=14)
+        inner = tk.Frame(header, bg=BG, padx=22, pady=12)
         inner.pack(fill=tk.X)
 
-        logo = tk.Canvas(inner, width=46, height=46, bd=0,
-                         highlightthickness=0, bg="#0d1829")
-        logo.pack(side=tk.LEFT, padx=(0, 14))
+        # destra: stato META + segno grafico del brand
+        bars = _BrandBars(inner)
+        bars.pack(side=tk.RIGHT, padx=(18, 0))
 
-        def _draw_logo(_e=None):
-            logo.delete("all")
-            w = logo.winfo_width() or 46
-            h = logo.winfo_height() or 46
-            _draw_gradient_round_rect(logo, w, h, ACCENT_DARK, INDIGO, radius=13)
-            logo.create_text(w / 2, h / 2, text="FS", fill="#ffffff",
-                             font=(FONT_UI, 14, "bold"))
+        meta_box = tk.Frame(inner, bg=BG)
+        meta_box.pack(side=tk.RIGHT)
+        tk.Label(meta_box, text="META Post v25.1+", bg=BG, fg=ACCENT,
+                 font=(FONT_UI, 9, "bold")).pack(anchor="e")
+        tk.Label(meta_box, text="dati reali .cas/.dat", bg=BG, fg=FAINT,
+                 font=(FONT_UI, 8)).pack(anchor="e", pady=(1, 0))
 
-        logo.bind("<Configure>", _draw_logo)
-        self.root.after(30, _draw_logo)
+        # sinistra: monogramma UC del brand + titoli
+        monogram = self._load_image("uc-monogram-white.png", 38)
+        if monogram is not None:
+            self._img_monogram = monogram
+            tk.Label(inner, image=monogram, bg=BG).pack(side=tk.LEFT, padx=(0, 14))
 
-        titles = tk.Frame(inner, bg="#0d1829")
+        titles = tk.Frame(inner, bg=BG)
         titles.pack(side=tk.LEFT)
-        tk.Label(titles, text="FS · MetaPostDiag", bg="#0d1829", fg=TEXT,
+        tk.Label(titles, text="FS · MetaPostDiag", bg=BG, fg=TEXT,
                  font=(FONT_UI, 16, "bold")).pack(anchor="w")
         tk.Label(
             titles,
-            text="Automatic CFD Post-Processing · Design Diagnostics · BETA CAE META Post",
-            bg="#0d1829", fg=MUTED, font=(FONT_UI, 8),
+            text="Post-Processing CFD automatico · Design Diagnostics · UniNa Corse",
+            bg=BG, fg=MUTED, font=(FONT_UI, 8),
         ).pack(anchor="w", pady=(1, 0))
 
-        right = tk.Frame(inner, bg="#0d1829")
-        right.pack(side=tk.RIGHT)
-        tk.Label(right, text="META Post v25.1+", bg="#0d1829", fg=ACCENT,
-                 font=(FONT_UI, 9, "bold")).pack(anchor="e")
-        tk.Label(right, text="Interfaccia v2.1 · dati reali .cas/.dat", bg="#0d1829",
-                 fg=FAINT, font=(FONT_UI, 8)).pack(anchor="e", pady=(1, 0))
-
-        GradientStrip(self.root).pack(fill=tk.X)
+        GradientStrip(self.root, height=6).pack(fill=tk.X)
 
     # ------------------------------------------------------------------ left column
     def _build_source_card(self, parent):
@@ -581,7 +666,7 @@ class AeroDiagnosticsGUI:
         files.pack(fill=tk.X, pady=(10, 0))
         self.lbl_cas_name, self.lbl_cas_size = self._file_row(files, ACCENT, "Nessun file .cas")
         tk.Frame(files, bg=BORDER_SOFT, height=1).pack(fill=tk.X, padx=10)
-        self.lbl_dat_name, self.lbl_dat_size = self._file_row(files, "#a78bfa", "Nessun file .dat")
+        self.lbl_dat_name, self.lbl_dat_size = self._file_row(files, VIOLET_SOFT, "Nessun file .dat")
 
         field_label(body, "Assieme da isolare").pack(anchor="w", pady=(12, 5))
         asm_row = tk.Frame(body, bg=SURFACE)
@@ -721,7 +806,7 @@ class AeroDiagnosticsGUI:
             stats.grid_columnconfigure(i, weight=1, uniform="stat")
         cas_card, self.stat_cas = self._stat_card(stats, "FILE .CAS", "—", ACCENT)
         cas_card.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-        pid_card, self.stat_pid = self._stat_card(stats, "PID ISOLATI", "—", "#a78bfa")
+        pid_card, self.stat_pid = self._stat_card(stats, "PID ISOLATI", "—", VIOLET_SOFT)
         pid_card.grid(row=0, column=1, sticky="ew", padx=5)
         meta_found = bool(find_meta_executable(
             self.config.get("meta", {}).get("executable_path", "auto")))
@@ -777,14 +862,18 @@ class AeroDiagnosticsGUI:
 
         self.txt_log.tag_configure("time", foreground=FAINT)
         self.txt_log.tag_configure("info", foreground=TEXT_SOFT)
-        self.txt_log.tag_configure("step", foreground="#7dd3fc")
-        self.txt_log.tag_configure("ok", foreground="#4ade80")
+        self.txt_log.tag_configure("step", foreground=VIOLET_SOFT)
+        self.txt_log.tag_configure("ok", foreground=SUCCESS)
         self.txt_log.tag_configure("warn", foreground=WARNING)
         self.txt_log.tag_configure("error", foreground=DANGER)
 
     def _build_footer(self):
         bar = tk.Frame(self.root, bg=BG, padx=22, pady=7)
         bar.pack(fill=tk.X)
+        wordmark = self._load_image("wordmark-white.png", 16)
+        if wordmark is not None:
+            self._img_wordmark = wordmark
+            tk.Label(bar, image=wordmark, bg=BG).pack(side=tk.LEFT, padx=(0, 12))
         tk.Label(
             bar, text="X = Longitudinale  ·  Y = Verticale  ·  Z = Laterale (Z=0 simmetria)",
             bg=BG, fg=FAINT, font=(FONT_UI, 8),

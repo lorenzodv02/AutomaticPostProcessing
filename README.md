@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.0.4
+python main.py --version      # FS-MetaPostDiag 1.1.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,16 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.1.0 — interfaccia in brand identity UniNa Corse
+
+- **Interfaccia riallineata al brand book** (`brand.py`): palette ufficiale `#11255C` · `#5B2581` · `#FDEB19` · `#d8eefc`, sfumature derivate dalle rampe del brand book.
+- **Header con il monogramma UC** e le **barre oblique** (il "segno grafico" del team) disegnate su Canvas: nessuna immagine extra da includere.
+- **Tipografia Roboto** (SIL OFL, inclusa in `assets/fonts` e registrata come font privato del processo, senza installarla sul sistema); i numeri e il log usano Roboto Condensed.
+- **Ethnocentric non viene incluso**: la licenza Typodermic è una *Desktop EULA* e non consente la ridistribuzione del font dentro un'applicazione. Il font display è quindi Roboto.
+- Pulsante principale a gradiente giallo con testo navy; azioni secondarie in viola; log e stato con i colori semantici derivati dal brand.
+- Wordmark UniNa Corse nel footer; icona della finestra allineata all'eseguibile.
+- Il label `.dat` e i PID usano la tinta viola del brand (prima erano colori fuori palette).
 
 ### v1.0.4 — nessun traceback Tkinter nella GUI
 

@@ -16,6 +16,13 @@ datas = [
     ("meta_driver/meta_post_worker.py", "meta_driver"),
     # Icona della finestra Tkinter (quella dell'exe la imposta `icon=` qui sotto)
     ("assets/FS-MetaPostDiag.ico", "assets"),
+    # Brand identity: icona PNG, monogramma UC, logotipo e font Roboto (OFL).
+    # I font vengono registrati a runtime come privati del processo.
+    ("assets/FS-MetaPostDiag.png", "assets"),
+    ("assets/uc-monogram-white.png", "assets"),
+    ("assets/uc-monogram-navy.png", "assets"),
+    ("assets/wordmark-white.png", "assets"),
+    ("assets/fonts", "assets/fonts"),
 ]
 
 a = Analysis(
