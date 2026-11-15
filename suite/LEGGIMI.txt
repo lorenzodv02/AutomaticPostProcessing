@@ -1,14 +1,15 @@
 Aero Suite — un processo, un report
 ===================================
 
-Un solo comando che porta dal `.cas` al progetto: estrae la geometria del fondo
-dalla mesh, costruisce le tabelle e genera **un unico report brandizzato**
-(`Aero_Suite.html`) con cinque sezioni:
+Un solo comando che porta dal `.cas` al progetto: estrae la geometria **di ogni
+assieme** (fondo, ala anteriore, ala posteriore, corpo, gomme) dalla mesh,
+costruisce le tabelle e genera **un unico report brandizzato** (`Aero_Suite.html`)
+con cinque sezioni:
 
     01 Panoramica      KPI, mappa deportanza/resistenza, tabella dei casi
     02 Confronto zone  differenza per zona tra due casi qualsiasi
-    03 Sintesi         vettura ricomposta zona per zona + tre pacchetti da simulare
-    04 Geometria       profili del fondo dalla mesh, misure, correlazioni
+    03 Sintesi         vettura ricomposta zona per zona, con filtro per famiglia
+    04 Geometria       profili del fondo, ali (apertura/corda/area/AR), superfici, correlazioni
     05 Metodo          catena dei passaggi e limiti
 
 Cosa serve

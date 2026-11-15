@@ -57,14 +57,32 @@ def _build(tmp, cases, exclusions=(), with_geometry=True):
             "rise_kind": "diffusore", "rise_length_m": 0.5, "rise_angle_deg": 10.0 + index,
             "expansion_ratio": 2.0 + 0.1 * index, "plan_area_m2": 0.5,
             "floor_area_m2": 1.0,
+            "front_span_m": 1.4, "front_chord_m": 0.3, "front_area_m2": 0.42,
+            "front_aspect": 4.6, "rear_span_m": 1.1, "rear_chord_m": 0.25,
+            "rear_area_m2": 0.27, "rear_aspect": 4.4,
+            "area_fondo_m2": 1.0, "area_ala_anteriore_m2": 2.1,
+            "area_ala_posteriore_m2": 1.9, "area_corpo_m2": 3.0,
         }
         stations = 12
-        geometry = {
+        floor = {
             "available": True,
             "x_m": [1.5 + 0.05 * i for i in range(stations)],
             "h_min_m": [0.04 + 0.001 * i for i in range(stations)],
             "h_mean_m": [0.05] * stations, "width_m": [0.5] * stations,
             "section_m2": [0.02] * stations, "ramp": {}, "zones": [],
+        }
+        geometry = {
+            "available": True, "assembly": "full_car",
+            "floor": floor,
+            "wings": {
+                "front": {"available": True, "span_m": 1.4, "chord_mean_m": 0.3,
+                          "planform_m2": 0.42, "aspect_ratio": 4.6},
+                "rear": {"available": True, "span_m": 1.1, "chord_mean_m": 0.25,
+                         "planform_m2": 0.27, "aspect_ratio": 4.4},
+            },
+            "parts": {"fondo": {"area_m2": 1.0, "zones": 5},
+                      "ala anteriore": {"area_m2": 2.1, "zones": 16}},
+            "zones": [],
         }
         json.dump({"case": case["case_id"], "summary": summary, "geometry": geometry},
                   open(os.path.join(tmp, "geom", case["case_id"] + ".json"), "w",
@@ -167,3 +185,36 @@ def test_dashboard_without_geometry_says_so():
         assert "esegui lo stadio geometria" in html.lower() or "geometria" in html.lower()
     finally:
         shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_payload_includes_wings_and_areas():
+    folder = tempfile.mkdtemp(prefix="suite_")
+    try:
+        _build(folder, _cases())
+        payload = suite.build_dashboard_payload(folder, os.path.join(REPO, "tools"))
+        rows = payload["geometry"]["rows"]
+        assert rows, "servono righe geometriche"
+        row = rows[0]
+        assert row["front_span"] == 1.4 and row["rear_span"] == 1.1
+        assert row["area_front"] == 2.1 and row["area_body"] == 3.0
+        assert payload["counts"]["geom"] == 5
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_family_packages_from_synthesis():
+    synthesis = {"rows": [
+        {"zone": "flat_floor", "family": "fondo", "donor": "D7", "gain": 8.0,
+         "drag_delta": 0.1, "reliable": True, "excluded_family": False},
+        {"zone": "front_main", "family": "ala anteriore", "donor": "V12", "gain": 24.0,
+         "drag_delta": 6.0, "reliable": True, "excluded_family": False},
+        {"zone": "rear_main", "family": "ala posteriore", "donor": "D8", "gain": 8.0,
+         "drag_delta": -0.5, "reliable": True, "excluded_family": False},
+        {"zone": "front_tyre", "family": "gomme", "donor": "X", "gain": 99.0,
+         "drag_delta": 0.0, "reliable": True, "excluded_family": True},
+    ]}
+    packages = suite._family_packages(synthesis)
+    names = [p["name"] for p in packages]
+    assert names == ["Solo ala anteriore", "Solo ala posteriore", "Solo fondo"]
+    assert packages[0]["gain"] == 24.0 and packages[0]["zones"] == 1
+    assert all(p["family"] != "gomme" for p in packages)

@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.15.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.16.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.15.0
+python main.py --version      # FS-MetaPostDiag 1.16.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,16 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.16.0 — Geometria di ogni assieme, non solo il fondo
+
+Il fondo era solo il primo assieme provato, non l'unico importante:
+
+- **`meta_driver/geometry.py`**: descrittori di **tutte** le zone aero e, per ogni assieme, le misure che contano — fondo (profilo, altezza minima, salita, espansione), **ali** (apertura, corda media, area in pianta, allungamento), superfici per famiglia. Funziona anche su un full car: le ali si leggono dalle zone `front_*`/`rear_*` senza rifare un caso dedicato.
+- **`--geometry-only --assembly …`**: undertray, front wing, rear wing o full car.
+- **Sintesi per famiglia**: nella scheda Sintesi puoi scegliere "solo ala anteriore", "solo ala posteriore", "solo corpo" o tutte; non solo il fondo.
+- La suite passa l'assieme del caso (`assieme` nel dataset) all'exe, quindi ogni caso usa il suo.
+- Verificato sul caso reale FW5 full car: ala anteriore apertura 1,66 m, corda media 0,539 m, area 0,894 m², AR 3,08; ala posteriore 1,40 m, 0,657 m, 0,917 m², AR 2,13; 43 zone.
 
 ### v1.15.0 — Aero Suite: un processo, un report, brand di squadra
 

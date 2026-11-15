@@ -161,6 +161,7 @@ __HEADER__
   <div class="card">
     <h2><span class="accent"></span>Le tre proposte</h2>
     <p class="hint">Pacchetti incrementali da simulare. Clicca per il piano di prova.</p>
+    <div class="controls" id="focus"></div>
     <div class="packages" id="packages"></div>
     <div id="package-detail"></div>
   </div>
@@ -168,14 +169,24 @@ __HEADER__
 
 <section class="panel" id="panel-geometry">
   <div class="card">
-    <h2><span class="accent"></span>Geometria del fondo, dalla mesh</h2>
-    <p class="hint">Superficie più bassa lungo X, scala comune. In etichetta altezza minima e angolo del tratto in salita.</p>
+    <h2><span class="accent"></span>Geometria dalla mesh</h2>
+    <p class="hint">Fondo, ali e superfici: ogni assieme ha le sue misure. Qui sotto i profili del fondo, in scala comune.</p>
     <div id="profiles"></div>
     <p class="hint" id="geom-note" style="margin-top:8px;"></p>
   </div>
   <div class="card">
-    <h2><span class="accent"></span>Misure e prestazioni</h2>
+    <h2><span class="accent"></span>Fondo: misure e prestazioni</h2>
     <div id="geom-table"></div>
+  </div>
+  <div class="card">
+    <h2><span class="accent"></span>Ali: apertura, corda, area, allungamento</h2>
+    <p class="hint">Dalla mesh di ogni caso, anche quando il caso e' un full car: non serve un assieme dedicato.</p>
+    <div id="geom-wings"></div>
+  </div>
+  <div class="card">
+    <h2><span class="accent"></span>Superfici per famiglia</h2>
+    <p class="hint">Area delle superfici aero per famiglia di zone: fondo, ala anteriore, ala posteriore, corpo, gomme.</p>
+    <div id="geom-areas"></div>
   </div>
   <div class="card">
     <h2><span class="accent"></span>Correlazioni</h2>
@@ -425,13 +436,34 @@ __FOOTER__
           (r.drag_delta >= 0 ? "+" : "") + r.drag_delta.toFixed(1) + '</td><td class="mono">' + r.zone_noise.toFixed(2) + '</td></tr>';
       }).join("") + '</tbody></table>';
 
+    var focus = "tutte";
     var selected = S.proposals.length ? S.proposals[0].name : null;
+    function activePackages() {
+      if (focus === "tutte") return S.proposals;
+      return (S.families || []).filter(function (f) { return f.family === focus; });
+    }
+    function renderFocus() {
+      var families = (S.families || []).map(function (f) { return f.family; });
+      var options = [["tutte", "Tutte le famiglie"]].concat(families.map(function (f) { return [f, f]; }));
+      document.getElementById("focus").innerHTML = options.map(function (item) {
+        return '<button class="tab' + (focus === item[0] ? ' active' : '') + '" data-focus="' + item[0] + '">' +
+          (item[1].charAt(0).toUpperCase() + item[1].slice(1)) + '</button>';
+      }).join("");
+      Array.prototype.forEach.call(document.querySelectorAll("#focus button"), function (node) {
+        node.addEventListener("click", function () {
+          focus = node.getAttribute("data-focus");
+          selected = activePackages().length ? activePackages()[0].name : null;
+          renderFocus(); renderPackages();
+        });
+      });
+    }
     function renderPackages() {
-      document.getElementById("packages").innerHTML = S.proposals.map(function (p) {
+      var list = activePackages();
+      document.getElementById("packages").innerHTML = list.map(function (p) {
         return '<div class="package' + (p.name === selected ? ' sel' : '') + '" data-name="' + p.name + '">' +
           '<h3>' + p.name + '</h3><div class="big">+' + p.gain.toFixed(1) + ' <span class="small">N</span></div>' +
           '<div class="small">drag ' + (p.delta_drag >= 0 ? "+" : "") + p.delta_drag.toFixed(1) + ' N · ' +
-          p.zones + ' zone · ' + p.interfaces + ' interfacce</div></div>';
+          p.zones + ' zone' + (p.family ? ' · ' + p.family : ' · ' + p.interfaces + ' interfacce') + '</div></div>';
       }).join("");
       Array.prototype.forEach.call(document.querySelectorAll(".package"), function (node) {
         node.addEventListener("click", function () { selected = node.getAttribute("data-name"); renderPackages(); renderDetail(); });
@@ -439,7 +471,7 @@ __FOOTER__
       renderDetail();
     }
     function renderDetail() {
-      var p = S.proposals.filter(function (x) { return x.name === selected; })[0];
+      var p = activePackages().filter(function (x) { return x.name === selected; })[0];
       if (!p) return;
       var donors = {};
       p.items.forEach(function (item) { (donors[item.donor] = donors[item.donor] || []).push(item.zone); });
@@ -448,6 +480,7 @@ __FOOTER__
         S.baseline + ' e cambia solo ' + plan + '. Atteso: +' + p.gain.toFixed(1) + ' N, drag ' +
         (p.delta_drag >= 0 ? "+" : "") + p.delta_drag.toFixed(1) + ' N. Interfacce da raccordare: ' + p.interfaces + '.</div>';
     }
+    renderFocus();
     renderPackages();
   }
 
@@ -456,17 +489,24 @@ __FOOTER__
     var G = D.geometry;
     var box = document.getElementById("profiles");
     if (!G || !G.available) {
-      box.innerHTML = '<p class="empty">Nessun profilo disponibile: esegui lo stadio geometria della suite (legge i .cas).</p>';
+      box.innerHTML = '<p class="empty">Nessuna geometria disponibile: esegui lo stadio geometria della suite (legge i .cas).</p>';
       document.getElementById("geom-note").textContent = "";
       document.getElementById("geom-table").innerHTML = "";
+      document.getElementById("geom-wings").innerHTML = "";
+      document.getElementById("geom-areas").innerHTML = "";
       document.getElementById("geom-corr").innerHTML = "";
       return;
     }
-    var profiles = G.profiles;
+    var profiles = G.profiles || [];
     var xs = [], hs = [];
     profiles.forEach(function (p) { xs = xs.concat(p.x); hs = hs.concat(p.h); });
     var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
     var ymax = Math.max.apply(null, hs) * 1000 || 1;
+    if (!profiles.length) {
+      box.innerHTML = '<p class="empty">Nessun profilo del fondo in questi casi. La geometria disponibile copre ali e ' +
+        'superfici per famiglia (sotto).</p>';
+      document.getElementById("geom-note").textContent = "Per il profilo del fondo serve un caso con zone flat_floor/diffusore/venturi.";
+    }
     var columns = 4, cellW = 1160 / columns, rows = Math.ceil(profiles.length / columns), cellH = 150;
     var svg = ['<svg viewBox="0 0 1160 ' + (rows * cellH + 6) + '" width="100%">'];
     profiles.forEach(function (p, index) {
@@ -486,16 +526,37 @@ __FOOTER__
     document.getElementById("geom-note").textContent =
       "Profilo = superficie più bassa a ogni X. Se una zona ha pareti laterali o un labbro posteriore basso, " +
       "il profilo ne risente: la ladder delle zone (in dataset_geom.csv) è il dato più robusto.";
-    var rowsHtml = G.rows.map(function (r) {
-      return '<tr><td>' + r.case_id + '</td><td class="mono">' + fmt1(r.dep) + '</td><td class="mono">' +
-        (r.throat_mm === null ? "n/d" : r.throat_mm.toFixed(1)) + '</td><td class="mono">' +
-        (r.rise_angle === null ? "n/d" : r.rise_angle.toFixed(1)) + '</td><td class="mono">' +
-        (r.expansion === null ? "n/d" : r.expansion.toFixed(2)) + '</td><td class="mono">' +
-        (r.floor_area === null ? "n/d" : r.floor_area.toFixed(2)) + '</td><td>' + (r.kind || "n/d") + '</td></tr>';
-    }).join("");
-    document.getElementById("geom-table").innerHTML = '<table><thead><tr><th>caso</th><th>dep N</th>' +
+    function fmt(value, digits) {
+      return (value === null || value === undefined) ? "n/d" : Number(value).toFixed(digits);
+    }
+    var floorRows = G.rows.filter(function (r) { return r.throat_mm !== null || r.rise_angle !== null; });
+    document.getElementById("geom-table").innerHTML = floorRows.length ? '<table><thead><tr><th>caso</th><th>dep N</th>' +
       '<th>altezza minima mm</th><th>angolo salita deg</th><th>espansione</th><th>area fondo m²</th>' +
-      '<th>salita</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>';
+      '<th>salita</th></tr></thead><tbody>' + floorRows.map(function (r) {
+        return '<tr><td>' + r.case_id + '</td><td class="mono">' + fmt(r.dep, 1) + '</td><td class="mono">' +
+          fmt(r.throat_mm, 1) + '</td><td class="mono">' + fmt(r.rise_angle, 1) + '</td><td class="mono">' +
+          fmt(r.expansion, 2) + '</td><td class="mono">' + fmt(r.floor_area, 2) + '</td><td>' + (r.kind || "n/d") + '</td></tr>';
+      }).join("") + '</tbody></table>' : '<p class="empty">Nessun caso con geometria del fondo.</p>';
+
+    var wingRows = G.rows.filter(function (r) { return r.front_span !== null || r.rear_span !== null; });
+    document.getElementById("geom-wings").innerHTML = wingRows.length ? '<table><thead><tr><th>caso</th>' +
+      '<th>apertura ant m</th><th>corda ant m</th><th>area ant m²</th><th>AR ant</th>' +
+      '<th>apertura post m</th><th>corda post m</th><th>area post m²</th><th>AR post</th></tr></thead><tbody>' +
+      wingRows.map(function (r) {
+        return '<tr><td>' + r.case_id + '</td><td class="mono">' + fmt(r.front_span, 2) + '</td><td class="mono">' +
+          fmt(r.front_chord, 3) + '</td><td class="mono">' + fmt(r.front_area, 2) + '</td><td class="mono">' +
+          fmt(r.front_aspect, 2) + '</td><td class="mono">' + fmt(r.rear_span, 2) + '</td><td class="mono">' +
+          fmt(r.rear_chord, 3) + '</td><td class="mono">' + fmt(r.rear_area, 2) + '</td><td class="mono">' +
+          fmt(r.rear_aspect, 2) + '</td></tr>';
+      }).join("") + '</tbody></table>' : '<p class="empty">Nessun caso con geometria delle ali.</p>';
+
+    document.getElementById("geom-areas").innerHTML = '<table><thead><tr><th>caso</th><th>fondo m²</th>' +
+      '<th>ala ant m²</th><th>ala post m²</th><th>corpo m²</th><th>gomme m²</th></tr></thead><tbody>' +
+      G.rows.map(function (r) {
+        return '<tr><td>' + r.case_id + '</td><td class="mono">' + fmt(r.area_fondo, 2) + '</td><td class="mono">' +
+          fmt(r.area_front, 2) + '</td><td class="mono">' + fmt(r.area_rear, 2) + '</td><td class="mono">' +
+          fmt(r.area_body, 2) + '</td><td class="mono">' + fmt(r.area_wheels, 2) + '</td></tr>';
+      }).join("") + '</tbody></table>';
     document.getElementById("geom-corr").innerHTML = (G.correlations.length ? '<table><thead><tr><th>prestazione</th>' +
       '<th>metrica</th><th>r</th><th>n</th></tr></thead><tbody>' + G.correlations.map(function (item) {
         return '<tr><td>' + item.target + '</td><td>' + item.metric + '</td><td class="mono">' +

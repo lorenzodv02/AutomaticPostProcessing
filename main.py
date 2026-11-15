@@ -32,7 +32,7 @@ from config_bridge import load_config as load_config_file
 from config_bridge import validate_config
 from file_discovery import NoCaseFilesFound, try_discover
 from meta_driver.fluent_parser import extract_real_mesh_and_cfd_data
-from meta_driver.geometry import floor_profile, summarize
+from meta_driver.geometry import extract_geometry
 from version import __version__
 
 # Percorso del config.yaml effettivamente usato (None = default interni)
@@ -172,34 +172,50 @@ def _run_geometry_only(cfg: dict, args) -> int:
     )
     bbox = data.get("bounding_box") or {}
     scale = float(bbox.get("coord_scale_to_m") or 1.0)
-    profile = floor_profile(data.get("zone_meshes") or {}, bbox, coord_scale=scale)
+    half_car = bool(data.get("is_half_car_symmetric"))
+    geometry = extract_geometry(data.get("zone_meshes") or {}, bbox, coord_scale=scale,
+                                assembly=assembly, half_car=half_car)
     payload = {
         "case": os.path.splitext(os.path.basename(cas_file))[0],
         "cas_file": cas_file,
         "assembly": assembly,
+        "half_car": half_car,
         "bounding_box": bbox,
-        "summary": summarize(profile),
-        "geometry": profile,
+        "summary": geometry.get("summary") or {},
+        "geometry": geometry,
     }
     output_dir = os.path.join(workspace, "output_diagnostics")
     os.makedirs(output_dir, exist_ok=True)
     path = os.path.join(output_dir, "geometry.json")
     with open(path, "w", encoding="utf-8") as handle:
         _json.dump(payload, handle, ensure_ascii=False, indent=2)
-    if not profile.get("available"):
-        print("[GEOMETRIA] non disponibile: %s" % profile.get("reason"))
+    if not geometry.get("available"):
+        print("[GEOMETRIA] nessuna zona aero riconosciuta nell'assieme %s" % assembly)
         return 1
-    ramp = profile.get("ramp") or {}
-    indexes = profile.get("x_m") or [0.0]
-    position = min(int(profile.get("throat_pct", 0) / 100.0 * (len(indexes) - 1)), len(indexes) - 1)
-    print("[GEOMETRIA] fondo: %.2f..%.2f m | altezza minima %.1f mm al %.0f%% | "
-          "%s %.1f deg su %.2f m | espansione %.2f | area %.3f m2"
-          % (profile["x_range_m"][0], profile["x_range_m"][1],
-             (profile.get("h_min_m") or [0.0])[position] * 1000.0,
-             profile.get("throat_pct", 0.0), ramp.get("kind") or "tratto in salita",
-             ramp.get("angle_deg") or 0.0, ramp.get("length_m") or 0.0,
-             profile.get("expansion_ratio") or 0.0, profile.get("floor_area_m2") or 0.0))
-    print("[GEOMETRIA] scritto: %s" % path)
+    floor = geometry.get("floor") or {}
+    if floor.get("available"):
+        ramp = floor.get("ramp") or {}
+        indexes = floor.get("x_m") or [0.0]
+        position = min(int(floor.get("throat_pct", 0) / 100.0 * (len(indexes) - 1)), len(indexes) - 1)
+        print("[GEOMETRIA] fondo: %.2f..%.2f m | altezza minima %.1f mm al %.0f%% | "
+              "%s %.1f deg su %.2f m | espansione %.2f | area %.3f m2"
+              % (floor["x_range_m"][0], floor["x_range_m"][1],
+                 (floor.get("h_min_m") or [0.0])[position] * 1000.0,
+                 floor.get("throat_pct", 0.0), ramp.get("kind") or "tratto in salita",
+                 ramp.get("angle_deg") or 0.0, ramp.get("length_m") or 0.0,
+                 floor.get("expansion_ratio") or 0.0, floor.get("floor_area_m2") or 0.0))
+    wings = geometry.get("wings") or {}
+    for label, wing in (("ala anteriore", wings.get("front")), ("ala posteriore", wings.get("rear"))):
+        if wing and wing.get("available"):
+            print("[GEOMETRIA] %s: apertura %.2f m | corda media %.3f m | area %.3f m2 | allungamento %.2f"
+                  % (label, wing["span_m"], wing["chord_mean_m"] or 0.0,
+                     wing["planform_m2"], wing["aspect_ratio"] or 0.0))
+    parts = geometry.get("parts") or {}
+    if parts:
+        print("[GEOMETRIA] superfici per famiglia: " + ", ".join(
+            "%s %.3f m2" % (family, bucket["area_m2"])
+            for family, bucket in sorted(parts.items(), key=lambda kv: -kv[1]["area_m2"])))
+    print("[GEOMETRIA] assieme: %s | scritto: %s" % (assembly, path))
     return 0
 
 

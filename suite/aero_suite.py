@@ -87,6 +87,7 @@ def load_cases(data_dir):
             "iter": row.get("iterazioni") or "",
             "wing": row.get("ala_post") or "",
             "diff": row.get("diffusore") or "",
+            "assembly": row.get("assieme") or "",
             "cas_file": row.get("cas_file") or "",
         })
     cases.sort(key=lambda c: -(c["dep"] or 0))
@@ -131,9 +132,11 @@ def stage_geometry(data_dir, exe, cases_root=None, force=False, timeout=900):
             print("  %-24s cartella del caso non trovata (usa --cases-root)" % case["id"])
             failed += 1
             continue
+        command = [exe, "--geometry-only", "-w", directory]
+        if case.get("assembly"):
+            command.extend(["--assembly", case["assembly"]])
         try:
-            result = subprocess.run([exe, "--geometry-only", "-w", directory],
-                                    capture_output=True, text=True, errors="replace",
+            result = subprocess.run(command, capture_output=True, text=True, errors="replace",
                                     timeout=timeout)
             output = (result.stdout or "") + (result.stderr or "")
         except (OSError, subprocess.TimeoutExpired) as exc:
@@ -186,13 +189,29 @@ def pearson(x, y):
 
 
 GEOM_METRICS = [
+    # fondo
     ("throat_h_m", "Altezza minima", "mm", 1000.0),
     ("throat_pct", "Posizione minima", "%", 1.0),
     ("rise_angle_deg", "Angolo salita", "deg", 1.0),
     ("rise_length_m", "Lunghezza salita", "mm", 1000.0),
-    ("expansion_ratio", "Espansione", "x", 1.0),
-    ("plan_area_m2", "Area in pianta", "m2", 1.0),
-    ("floor_area_m2", "Area superficie fondo", "m2", 1.0),
+    ("expansion_ratio", "Espansione fondo", "x", 1.0),
+    ("plan_area_m2", "Area in pianta fondo", "m2", 1.0),
+    ("floor_area_m2", "Superficie fondo", "m2", 1.0),
+    # ali (funzionano anche su full car)
+    ("front_span_m", "Apertura ala ant", "m", 1.0),
+    ("front_chord_m", "Corda media ala ant", "m", 1.0),
+    ("front_area_m2", "Area ala ant", "m2", 1.0),
+    ("front_aspect", "Allungamento ala ant", "", 1.0),
+    ("rear_span_m", "Apertura ala post", "m", 1.0),
+    ("rear_chord_m", "Corda media ala post", "m", 1.0),
+    ("rear_area_m2", "Area ala post", "m2", 1.0),
+    ("rear_aspect", "Allungamento ala post", "", 1.0),
+    # superfici per famiglia
+    ("area_fondo_m2", "Superficie zona fondo", "m2", 1.0),
+    ("area_ala_anteriore_m2", "Superficie ala ant", "m2", 1.0),
+    ("area_ala_posteriore_m2", "Superficie ala post", "m2", 1.0),
+    ("area_corpo_m2", "Superficie corpo", "m2", 1.0),
+    ("area_gomme_m2", "Superficie gomme", "m2", 1.0),
 ]
 
 
@@ -213,21 +232,40 @@ def load_geometries(data_dir, cases):
 
 
 def geometry_tables(cases, geometries):
+    """Una riga per caso: fondo, ali e superfici per famiglia (qualsiasi assieme)."""
     rows, correlations = [], []
     for case in cases:
         entry = geometries.get(case["id"])
         if not entry:
             continue
         summary = entry["summary"]
+        geometry = entry["geometry"]
+        wings = geometry.get("wings") or {}
+        if not wings and geometry.get("available") and geometry.get("x_m"):
+            wings = {}  # formato v1.14: solo fondo
+        front = wings.get("front") or {}
+        rear = wings.get("rear") or {}
         rows.append({
             "case_id": case["id"], "dep": case["dep"], "drag": case["drag"], "ld": case["ld"],
-            "throat_mm": (summary.get("throat_h_m") or 0.0) * 1000.0 if summary.get("throat_h_m") is not None else None,
+            "assembly": geometry.get("assembly") or entry.get("payload", {}).get("assembly") or "",
+            "throat_mm": (summary.get("throat_h_m") * 1000.0) if isinstance(summary.get("throat_h_m"), (int, float)) else None,
             "rise_angle": summary.get("rise_angle_deg"),
-            "rise_length": summary.get("rise_length_m"),
             "expansion": summary.get("expansion_ratio"),
             "floor_area": summary.get("floor_area_m2"),
-            "plan_area": summary.get("plan_area_m2"),
             "kind": summary.get("rise_kind"),
+            "front_span": front.get("span_m") if front.get("available") else None,
+            "front_chord": front.get("chord_mean_m") if front.get("available") else None,
+            "front_area": front.get("planform_m2") if front.get("available") else None,
+            "front_aspect": front.get("aspect_ratio") if front.get("available") else None,
+            "rear_span": rear.get("span_m") if rear.get("available") else None,
+            "rear_chord": rear.get("chord_mean_m") if rear.get("available") else None,
+            "rear_area": rear.get("planform_m2") if rear.get("available") else None,
+            "rear_aspect": rear.get("aspect_ratio") if rear.get("available") else None,
+            "area_fondo": summary.get("area_fondo_m2"),
+            "area_front": summary.get("area_ala_anteriore_m2"),
+            "area_rear": summary.get("area_ala_posteriore_m2"),
+            "area_body": summary.get("area_corpo_m2"),
+            "area_wheels": summary.get("area_gomme_m2"),
         })
     for target, label in (("dep", "deportanza"), ("drag", "resistenza"), ("ld", "L/D")):
         for key, name, _unit, _scale in GEOM_METRICS:
@@ -239,6 +277,27 @@ def geometry_tables(cases, geometries):
                                      "r": round(value, 2), "n": len(xs)})
     correlations.sort(key=lambda item: -abs(item["r"]))
     return rows, correlations
+
+
+def _family_packages(synthesis):
+    """Un pacchetto per famiglia: non solo il fondo."""
+    rows = [row for row in synthesis.get("rows", [])
+            if row.get("reliable") and not row.get("excluded_family")]
+    packages = []
+    for family in sorted({row["family"] for row in rows}):
+        items = [row for row in rows if row["family"] == family]
+        packages.append({
+            "name": "Solo %s" % family,
+            "family": family,
+            "gain": round(sum(row["gain"] for row in items), 2),
+            "delta_drag": round(sum(row["drag_delta"] for row in items), 2),
+            "zones": len(items),
+            "donors": sorted({row["donor"] for row in items}),
+            "interfaces": 0,
+            "items": [{"zone": row["zone"], "donor": row["donor"], "gain": row["gain"],
+                       "family": family} for row in sorted(items, key=lambda r: -r["gain"])],
+        })
+    return packages
 
 
 def stage_tables(data_dir):
@@ -325,12 +384,22 @@ def build_dashboard_payload(data_dir, tools_dir=None):
         if not entry:
             continue
         geometry = entry["geometry"]
-        if not geometry.get("available") or not geometry.get("x_m"):
+        floor = geometry.get("floor") or {}
+        if not floor.get("available") and geometry.get("available") and geometry.get("x_m"):
+            floor = geometry          # formato v1.14: profilo del fondo in radice
+        if not floor.get("available"):
             continue
-        profiles.append({"case": case["id"], "x": geometry.get("x_m"),
-                         "h": geometry.get("h_min_m"), "summary": entry["summary"]})
-    geometry_block = {"available": bool(profiles), "profiles": profiles,
-                      "rows": geom_rows, "correlations": correlations}
+        profiles.append({"case": case["id"], "x": floor.get("x_m"),
+                         "h": floor.get("h_min_m"), "summary": entry["summary"]})
+    geometry_block = {
+        "available": bool(geom_rows),
+        "profiles": profiles,
+        "rows": geom_rows,
+        "correlations": correlations,
+        "assemblies": sorted({row.get("assembly") for row in geom_rows if row.get("assembly")}),
+    }
+    if synthesis.get("available"):
+        synthesis["families"] = _family_packages(synthesis)
     cases = [{"id": c["id"], "dep": c["dep"], "drag": c["drag"], "ld": c["ld"],
               "cop": c.get("cop"), "iter": c.get("iter") or "", "wing": c.get("wing") or "",
               "diff": c.get("diff") or ""} for c in raw_cases]
@@ -340,7 +409,7 @@ def build_dashboard_payload(data_dir, tools_dir=None):
         "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "noise_n": noise,
         "excluded": explorer.get("excluded") or sorted(load_exclusions(data_dir)),
-        "counts": {"cases": len(cases), "geom": len(profiles),
+        "counts": {"cases": len(cases), "geom": len(geometries),
                    "zones": len({zone for mapping in explorer.get("zones", {}).values()
                                  for zone in mapping})},
         "cases": cases,
@@ -374,8 +443,8 @@ def render_dashboard(payload, template_path, brand=None):
                                                    payload["kpis"]["best_dep"]["dep"])))
     header = brand.header_html(
         title='Aero Suite',
-        subtitle=("Dal .cas al progetto in un processo: forze per zona, geometria del fondo dalla mesh, "
-                  "confronto e sintesi della vettura. Un solo report, sempre lo stesso."),
+        subtitle=("Dal .cas al progetto in un processo: forze per zona, geometria dalla mesh per ogni "
+                  "assieme (fondo, ali, corpo), confronto e sintesi della vettura. Un solo report."),
         chips=chips,
     )
     footer = brand.footer_html(payload["generated"])
