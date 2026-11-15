@@ -32,8 +32,10 @@ from meta_driver.fluent_parser import (
 )
 from meta_driver.ses_generator import generate_meta_session_file
 from render_utils import (
+    DEFAULT_VELOCITY_INF,
     combine_zone_meshes as _combine_real_zone_meshes,
     rasterize_surface as _rasterize_surface,
+    resolve_velocity_inf as _resolve_velocity_inf,
     side_mask as _side_mask,
 )
 from config_bridge import (
@@ -317,7 +319,7 @@ def _compute_3d_streamlines(
     cp_vals: np.ndarray,
     bbox: dict,
     is_sym: bool = True,
-    v_inf: float = 16.67,
+    v_inf: float = DEFAULT_VELOCITY_INF,
 ) -> list:
     """
     Calcola le traiettorie 3D (X, Y, Z) e le velocita' locali |V| dei filetti fluidi (streamlines)
@@ -1218,7 +1220,9 @@ def _render_real_unpacked_mesh_views(
     # --------------------------------------------------------------------------
     # 10. SCREENSHOT STREAMLINES 3D DA VARIE PROSPETTIVE DELLA VETTURA
     # --------------------------------------------------------------------------
-    v_inf = float(physics_data.get("summary_kpis", {}).get("inlet_velocity", 16.67))
+    # Il KPI scritto dal parser e' `velocity_inf_ms` (dal config): prima si leggeva
+    # `inlet_velocity`, che non esiste, e si finiva sempre nel fallback 16.67 m/s.
+    v_inf = _resolve_velocity_inf(physics_data.get("summary_kpis", {}))
     slines = _compute_3d_streamlines(pts, tris, tri_centers, cp_vals, bbox, is_sym=is_sym, v_inf=v_inf)
 
     v_min_cmap = 0.5 * v_inf

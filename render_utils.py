@@ -50,6 +50,25 @@ def _fill_holes(grid, passes: int = 6):
     return out
 
 
+# Chiavi in cui il KPI della velocita' indisturbata puo' comparire.
+# `velocity_inf_ms` e' quella realmente scritta dal parser: `inlet_velocity`
+# NON esiste, e il vecchio fallback cablato a 16.67 (= 60 km/h) faceva ignorare
+# il valore del config (14 m/s) in tutte le viste con streamlines.
+VELOCITY_KEYS = ("velocity_inf_ms", "velocity_inf", "inlet_velocity", "v_inf")
+
+DEFAULT_VELOCITY_INF = 14.0
+
+
+def resolve_velocity_inf(kpis, default: float = DEFAULT_VELOCITY_INF) -> float:
+    """Velocita' indisturbata dai KPI, con catena di fallback esplicita."""
+    data = kpis or {}
+    for key in VELOCITY_KEYS:
+        value = data.get(key)
+        if isinstance(value, (int, float)) and float(value) > 0.0:
+            return float(value)
+    return float(default)
+
+
 def side_mask(normals, axis: int = 1, sign: int = -1, threshold: float = 0.15):
     """
     Maschera dei triangoli che appartengono a un lato della superficie.

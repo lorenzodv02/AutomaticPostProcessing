@@ -521,7 +521,7 @@ class AeroDiagnosticsGUI:
         self.var_workspace = tk.StringVar(value=os.path.abspath(project.get("workspace_dir", ".")))
         self.var_assembly = tk.StringVar(value=ASSEMBLY_LABELS.get(asm_key, ASSEMBLY_LABELS["undertray"]))
         self.var_meta_exe = tk.StringVar(value=find_meta_executable(meta.get("executable_path", "auto")) or "auto")
-        self.var_vinf = tk.StringVar(value=str(refs.get("velocity_inf", 16.67)))
+        self.var_vinf = tk.StringVar(value=str(refs.get("velocity_inf", 14.0)))
         self.var_rho = tk.StringVar(value=str(refs.get("density_air", 1.225)))
         self.var_apikey = tk.StringVar(value=ai.get("api_key", ""))
         self.var_provider = tk.StringVar(

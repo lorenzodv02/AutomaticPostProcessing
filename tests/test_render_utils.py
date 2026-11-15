@@ -152,3 +152,23 @@ def test_combine_mirror_doubles_the_mesh():
     assert full["tris"].shape[0] == 2 * half["tris"].shape[0]
     # la copia specchiata sta sul lato opposto in Z
     assert full["pts"][:, 2].min() < 0.0
+
+
+def test_resolve_velocity_prefers_real_kpi_key():
+    """La chiave scritta dal parser e' `velocity_inf_ms` (non `inlet_velocity`)."""
+    from render_utils import resolve_velocity_inf
+
+    assert resolve_velocity_inf({"velocity_inf_ms": 14.0}) == 14.0
+    assert resolve_velocity_inf({"velocity_inf_ms": 20.0, "inlet_velocity": 16.67}) == 20.0
+
+
+def test_resolve_velocity_fallbacks_and_default():
+    from render_utils import DEFAULT_VELOCITY_INF, resolve_velocity_inf
+
+    assert resolve_velocity_inf({"velocity_inf": 12.5}) == 12.5
+    assert resolve_velocity_inf({"inlet_velocity": 16.67}) == 16.67
+    # chiave assente o non valida -> default, NON un valore cablato a caso
+    assert resolve_velocity_inf({}) == DEFAULT_VELOCITY_INF
+    assert resolve_velocity_inf({"velocity_inf_ms": 0}) == DEFAULT_VELOCITY_INF
+    assert resolve_velocity_inf({"velocity_inf_ms": "x"}) == DEFAULT_VELOCITY_INF
+    assert resolve_velocity_inf(None) == DEFAULT_VELOCITY_INF

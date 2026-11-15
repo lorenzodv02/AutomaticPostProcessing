@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.9.3-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.9.4-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.9.3
+python main.py --version      # FS-MetaPostDiag 1.9.4
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,16 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.9.4 — la velocità delle streamlines arriva dal config
+
+Il titolo diceva `V_inf = 16,7 m/s` anche con 14 impostato. Causa: il codice leggeva un KPI che **non esiste** (`inlet_velocity`) e cadeva nel fallback cablato **16,67 m/s** (= 60 km/h); la chiave vera è `velocity_inf_ms`. Ora:
+
+- `resolve_velocity_inf` in `render_utils` con catena `velocity_inf_ms → velocity_inf → inlet_velocity → 14,0`;
+- usato sia dal launcher (streamlines) sia da `image_diagnostics`;
+- default della GUI allineato a `14,0` (era `16,67`).
+
+Effetto: velocità locali e scala colori erano il **19% più alte** in tutte le immagini con streamlines. Verificato sul caso FW5: titolo ora `V_inf = 14.0 m/s`, colorbar 7,5–27,5 invece di 10–30.
 
 ### v1.9.3 — commento del config allineato alla realtà
 

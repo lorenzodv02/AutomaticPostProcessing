@@ -9,6 +9,7 @@ Elabora le foto esportate da BETA CAE META Post e dalla proiezione della mesh re
 """
 
 import os
+from render_utils import resolve_velocity_inf as _resolve_velocity_inf
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from analyzer.verifier import verify_session_and_data, find_pixel_cluster_bbox
@@ -240,7 +241,8 @@ def analyze_and_annotate_images(session_bundle: dict) -> dict:
         # CASO 6: Streamlines 3D da Varie Prospettive
         # ----------------------------------------------------------------------
         elif cat == "streamlines":
-            v_inf = float(kpis.get("inlet_velocity", 16.67))
+            # Stessa risoluzione del launcher: `velocity_inf_ms` e' la chiave vera.
+            v_inf = _resolve_velocity_inf(kpis)
             peak_cp = float(kpis.get("peak_suction_cp", -2.5))
             v_max_est = v_inf * np.sqrt(max(0.1, 1.0 - peak_cp))
 
