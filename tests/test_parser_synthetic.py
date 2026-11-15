@@ -24,13 +24,14 @@ def _quiet(*_args, **_kwargs):
     return None
 
 
-def _extract(assembly="undertray"):
+def _extract(assembly="undertray", force_convention="lift"):
     folder = tempfile.mkdtemp(prefix="dsh_case_")
     cas_path, dat_path, expectations = build_synthetic_case(folder)
     result = extract_real_mesh_and_cfd_data(
         cas_path=cas_path,
         dat_path=dat_path,
         assembly_type=assembly,
+        force_convention=force_convention,
         log_fn=_quiet,
     )
     return result, expectations, folder
@@ -103,6 +104,48 @@ def test_forces_follow_the_documented_convention():
         assert math.isclose(integral, kpis["downforce_N"], abs_tol=0.1), integral
     finally:
         shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_force_convention_downforce_inverts_the_signs():
+    """
+    Convenzione "downforce" (report Fluent definito come downforce): stesso
+    modulo, segno invertito rispetto alla convenzione "lift" (default Fluent).
+    """
+    lift_res, expectations, folder_a = _extract(force_convention="lift")
+    df_res, _expectations, folder_b = _extract(force_convention="downforce")
+    try:
+        lift = lift_res["physics_data"]["summary_kpis"]
+        down = df_res["physics_data"]["summary_kpis"]
+
+        assert lift["force_convention"] == "lift"
+        assert down["force_convention"] == "downforce"
+
+        assert math.isclose(down["downforce_N"], -lift["downforce_N"], rel_tol=1e-9)
+        # la lift fisica (proiezione su +Y) non cambia con la convenzione
+        assert math.isclose(down["lift_N"], lift["lift_N"], rel_tol=1e-9)
+        assert math.isclose(down["downforce_N"], expectations["vertical_force_N"] * -1.0, rel_tol=1e-3)
+        # i coefficienti e l'efficienza seguono la convenzione scelta
+        assert math.isclose(down["CL_A"], -lift["CL_A"], rel_tol=1e-9)
+        assert math.isclose(down["efficiency_L_over_D"], -lift["efficiency_L_over_D"], rel_tol=1e-9)
+        # la somma per PID resta coerente con il KPI
+        pid_sum = sum(p["downforce_2x_N"] for p in df_res["physics_data"]["per_pid_breakdown"])
+        assert math.isclose(pid_sum, down["downforce_N"], abs_tol=0.5)
+    finally:
+        shutil.rmtree(folder_a, ignore_errors=True)
+        shutil.rmtree(folder_b, ignore_errors=True)
+
+
+def test_center_of_pressure_weights_only_downforce():
+    """Il CoP pesa la sola deportanza: gli elementi in portanza non lo spostano."""
+    from meta_driver.fluent_parser import center_of_pressure_x
+
+    x = np.array([0.0, 1.0, 2.0])
+    # elementi 0 e 1 spingono in basso (lift negativo), il 2 genera portanza
+    cop = center_of_pressure_x(x, np.array([-100.0, -300.0, +500.0]))
+    assert cop is not None
+    assert math.isclose(cop, (0.0 * 100.0 + 1.0 * 300.0) / 400.0, rel_tol=1e-9)
+    # nessuna deportanza -> None (il chiamante usa il centro geometrico)
+    assert center_of_pressure_x(x, np.array([10.0, 20.0, 30.0])) is None
 
 
 def test_drag_splits_pressure_and_viscous():

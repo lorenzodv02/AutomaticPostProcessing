@@ -33,6 +33,7 @@ from meta_driver.ses_generator import generate_meta_session_file
 from config_bridge import (
     cp_range as resolve_cp_range,
     cut_stations as resolve_cut_stations,
+    force_convention as resolve_force_convention,
 )
 # L'individuazione dei file vive in file_discovery.py (modulo leggero, testabile
 # in CI); qui viene solo re-esportata per compatibilita' con chi importa da qui.
@@ -41,51 +42,13 @@ from file_discovery import NoCaseFilesFound, discover_cas_dat  # noqa: F401
 
 
 def find_meta_executable(configured_path: str = "auto") -> str:
-    """Cerca l'eseguibile di BETA CAE META Post nei percorsi standard e utente di Windows."""
-    if configured_path and configured_path.lower() != "auto" and os.path.isfile(configured_path):
-        return configured_path
+    """
+    Percorso di BETA CAE META Post (la ricerca vive in `meta_locator`, cosi' e'
+    testabile in CI senza META installato). Restituisce "" se non lo trova.
+    """
+    from meta_locator import find_meta_executable as _locate
 
-    env_meta = os.environ.get("META_POST_EXE") or os.environ.get("BETA_META_PATH")
-    if env_meta and os.path.isfile(env_meta):
-        return env_meta
-
-    # Percorsi diretti noti (incluso AppData\Local\Apps\BETA_CAE_Systems)
-    direct_candidates = [
-        os.path.expandvars(r"%LOCALAPPDATA%\Apps\BETA_CAE_Systems\meta_post_v25.1.0\meta_post64.bat"),
-        os.path.expandvars(r"%LOCALAPPDATA%\Apps\BETA_CAE_Systems\shared_v25.1.0\win64\meta_post.exe"),
-        r"C:\Users\lollo\AppData\Local\Apps\BETA_CAE_Systems\meta_post_v25.1.0\meta_post64.bat",
-        r"C:\Users\lollo\AppData\Local\Apps\BETA_CAE_Systems\shared_v25.1.0\win64\meta_post.exe",
-    ]
-    for dc in direct_candidates:
-        if os.path.isfile(dc):
-            return dc
-
-    search_roots = [
-        os.path.expandvars(r"%LOCALAPPDATA%\Apps\BETA_CAE_Systems"),
-        os.path.expandvars(r"%LOCALAPPDATA%\BETA_CAE_Systems"),
-        os.path.expandvars(r"%USERPROFILE%\BETA_CAE_Systems"),
-        r"C:\Program Files\BETA_CAE_Systems",
-        r"C:\Program Files (x86)\BETA_CAE_Systems",
-        r"D:\BETA_CAE_Systems",
-        r"F:\BETA_CAE_Systems",
-    ]
-
-    exe_patterns = [
-        "meta_post64.bat",
-        "meta_post64.exe",
-        "meta_post.exe",
-        "meta64.bat",
-        "meta.bat",
-    ]
-
-    for root in search_roots:
-        if os.path.isdir(root):
-            for pat in exe_patterns:
-                matches = glob.glob(os.path.join(root, "**", pat), recursive=True)
-                if matches:
-                    return sorted(matches)[-1]
-
-    return ""
+    return _locate(configured_path)
 
 
 def _purge_previous_outputs(output_dir: str):
@@ -971,7 +934,7 @@ def _render_real_unpacked_mesh_views(
     slice_half_dx = 0.024 * L
     for idx, x_norm in enumerate(x_stations, start=1):
         x_coord = xmin + x_norm * L
-        fname_x = f"08_{idx:02d}_xcut_ptot_x{int(round(x_norm*100)):03d}pct.png"
+        fname_x = f"08_{idx:02d}_xcut_cp_x{int(round(x_norm*100)):03d}pct.png"
         px = os.path.join(images_dir, fname_x)
         if not _is_valid_meta_screenshot(px):
             mask_slice = np.abs(tri_centers[:, 0] - x_coord) <= slice_half_dx
@@ -1655,6 +1618,7 @@ def run_postprocessing_session(config: dict, workspace_dir: str = None, force_me
         assembly_type=requested_asm,
         ref_values=config.get("reference_values", {}),
         config=config,
+        force_convention=resolve_force_convention(config),
         log_fn=log_fn,
     )
 
@@ -1714,14 +1678,23 @@ def run_postprocessing_session(config: dict, workspace_dir: str = None, force_me
     meta_batch_executed = False
 
     if force_meta_batch and meta_exe and cas_file:
+        from meta_locator import describe_meta
+
+        meta_info = describe_meta(meta_exe)
+        timeout_s = int(config.get("meta", {}).get("batch_timeout_s", 360) or 360)
         try:
             env = os.environ.copy()
             env["CFD_WORKSPACE_DIR"] = workspace_dir
-            # Sintassi ufficiale META Post v25.1: -noses -s "session.ses"
+            # Sintassi ufficiale META Post: -noses -s "session.ses"
             cmd = [meta_exe, "-noses", "-s", ses_path]
-            print(f"[LAUNCHER] Avvio BETA CAE META Post v25.1: {' '.join(cmd)}")
-            subprocess.run(cmd, cwd=workspace_dir, env=env, timeout=360, check=False)
+            print(f"[LAUNCHER] Avvio {meta_info['label']} ({meta_info['kind']}): {' '.join(cmd)}")
+            completed = subprocess.run(cmd, cwd=workspace_dir, env=env,
+                                       timeout=timeout_s, check=False)
+            print(f"[LAUNCHER] {meta_info['label']} terminato con codice {completed.returncode}")
             meta_batch_executed = True
+        except subprocess.TimeoutExpired:
+            print(f"[LAUNCHER-WARN] {meta_info['label']} non ha terminato entro {timeout_s} s: "
+                  "proseguo con le immagini generate in Python")
         except Exception as exc:
             print(f"[LAUNCHER-WARN] Esecuzione META Post terminata con avviso: {exc}")
 

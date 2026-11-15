@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.3.0
+python main.py --version      # FS-MetaPostDiag 1.4.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,17 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.4.0 — convenzione delle forze, META Post riconosciuto, questioni aperte chiuse
+
+- **Convenzione lift/downforce configurabile** (`reference_values.report_force_convention`). In Fluent il report si definisce "lift" (proiezione su +Y: **deportanza negativa**) oppure "downforce" (segno invertito). Il parser ora espone sia `lift_N` (grandezza fisica) sia `downforce_N` secondo la convenzione scelta, con `CL`, `CL*A` ed efficienza coerenti: nel report i numeri coincidono con quelli del setup Fluent.
+- **Centro di pressione realmente pesato** (bug): il peso era `max(downforce, 0)` su valori negativi, quindi si ricadeva sempre sul centro geometrico (CoP = 50% L fisso). Ora pesa la sola parte che preme verso il basso.
+- **Asimmetria laterale corretta** (bug): il confronto tra le due metà usava i valori con segno e poteva dare 200%; ora somma i moduli e resta nel range 0–100%.
+- **META Post davvero riconosciuto e usato**: nuovo modulo `meta_locator.py` (leggero e testabile) che sceglie la **versione più alta** e preferisce il launcher `.bat`; l'invocazione stampa versione e codice di uscita, con timeout configurabile (`meta.batch_timeout_s`). Verificato sul campo: META Post v25.1.0 eseguito, exit 0.
+- **`.h5` e `.gz` ignorati**: il parser legge solo `.cas`/`.dat` binari Fluent; i formati HDF5/compressi non vengono più cercati né proposti.
+- **Report con le forze finali**: deportanza e resistenza totali in N in primo piano (somma di pressione + viscosa), con i coefficienti come dettaglio; rimossi gli split pressione/viscosa dalle tabelle. Efficienza mostrata come `|L|/D` (positiva) e `lift_N` affiancata per il confronto con Fluent.
+- **X-cut rinominati `xcut_cp_*`**: il grafico mostra Cp, non la pressione totale.
+- Nota di numerazione: la serie `06_ycut_velocity_*` è prodotta da META Post, quindi compare solo quando la sessione batch viene eseguita.
 
 ### v1.3.0 — report HTML in brand identity
 

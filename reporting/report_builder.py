@@ -252,11 +252,21 @@ def build_diagnostic_reports(
     ses_file = session_bundle.get("ses_file_path") or ""
     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
+    # "lift" di Fluent (proiezione su +Y) e convenzione scelta per il report
+    lift_n = float(kpis.get("lift_N", kpis.get("lift_total_N", 0.0)))
+    force_convention = str(kpis.get("force_convention", "lift") or "lift").lower()
+    force_note = ("Deportanza secondo la definizione Fluent 'downforce' (positiva verso il basso)"
+                  if force_convention == "downforce"
+                  else "Deportanza secondo la definizione Fluent 'lift' (proiezione su +Y, negativa verso il basso)")
+    visc_source = str(kpis.get("viscous_source", "n/d") or "n/d")
     cl_a = float(kpis.get("cl_a_total", kpis.get("CL_A", 0.0)))
     cd_a = float(kpis.get("cd_a_total", kpis.get("CD_A", 0.0)))
     df_n = float(kpis.get("downforce_total_N", kpis.get("downforce_N", 0.0)))
     drag_n = float(kpis.get("drag_total_N", kpis.get("drag_N", 0.0)))
-    l_d = float(kpis.get("efficiency_l_d", kpis.get("efficiency_L_over_D", 0.0)))
+    # Efficienza mostrata in valore assoluto: con la convenzione "lift" il
+    # rapporto firmato sarebbe negativo, ma la bonta' aerodinamica non cambia segno.
+    l_d_signed = float(kpis.get("efficiency_l_d", kpis.get("efficiency_L_over_D", 0.0)))
+    l_d = abs(l_d_signed)
     cop_x = float(kpis.get("cop_x_m", 0.0))
     cop_pct = float(kpis.get("cop_x_pct", 50.0))
     stall_val = float(kpis.get("stalled_area_percentage", kpis.get("stalled_surface_pct", 0.0)))
@@ -304,7 +314,7 @@ def build_diagnostic_reports(
         dr_tot_2x = float(p.get("drag_2x_N", -float(p.get("fx_N", 0.0)) * 2.0))
         dr_p_2x = float(p.get("drag_pressure_2x_N", dr_tot_2x))
         dr_v_2x = float(p.get("drag_viscous_2x_N", 0.0))
-        ld_pid = round(df_2x / dr_tot_2x, 2) if abs(dr_tot_2x) > 0.01 else 0.0
+        ld_pid = round(abs(df_2x) / dr_tot_2x, 2) if abs(dr_tot_2x) > 0.01 else 0.0
         sum_df_2x += df_2x
         sum_dr_2x += dr_tot_2x
         sum_dr_p_2x = locals().get("sum_dr_p_2x", 0.0) + dr_p_2x
@@ -328,10 +338,7 @@ def build_diagnostic_reports(
         <tr>
             <td><strong>{html.escape(pid_clean)}</strong></td>
             <td>{df_html}</td>
-            <td>
-                <strong style="color:#FF7A76;">{dr_tot_2x:.2f} N</strong>
-                <div style="font-size:0.75rem; color:var(--text-muted);">(P: {dr_p_2x:.2f} | V: {dr_v_2x:.2f})</div>
-            </td>
+            <td><strong style="color:#FF7A76;">{dr_tot_2x:.2f} N</strong></td>
             <td><strong style="color:#D8EEFC;">{ld_pid:.2f}</strong></td>
             <td>{p['n_faces']:,}</td>
             <td>{p['area_m2'] * 2.0:.4f} m&sup2;</td>
@@ -342,7 +349,7 @@ def build_diagnostic_reports(
         </tr>
         """)
 
-    tot_ld_2x = round(sum_df_2x / sum_dr_2x, 2) if abs(sum_dr_2x) > 0.01 else 0.0
+    tot_ld_2x = round(abs(sum_df_2x) / abs(sum_dr_2x), 2) if abs(sum_dr_2x) > 0.01 else 0.0
     excel_rows.append({
         "pid": "TOTALE ASSIEME (x2)",
         "downforce_2x": round(sum_df_2x, 2),
@@ -355,12 +362,9 @@ def build_diagnostic_reports(
         <tr style="background: rgba(253, 235, 25, 0.10); border-top: 2px solid #FDEB19;">
             <td><strong>TOTALE ASSIEME (x2)</strong></td>
             <td><strong style="color:#FDEB19; font-size:1.0rem;">{sum_df_2x:.2f} N</strong></td>
-            <td>
-                <strong style="color:#FF7A76; font-size:1.0rem;">{sum_dr_2x:.2f} N</strong>
-                <div style="font-size:0.78rem; color:var(--text-muted); font-weight:normal;">(P: {sum_dr_p_2x:.2f} | V: {sum_dr_v_2x:.2f})</div>
-            </td>
+            <td><strong style="color:#FF7A76; font-size:1.0rem;">{sum_dr_2x:.2f} N</strong></td>
             <td><strong style="color:#D8EEFC; font-size:1.0rem;">{tot_ld_2x:.2f}</strong></td>
-            <td colspan="6" style="color:var(--text-muted); font-size:0.84rem;">Valori complessivi Full-Car (inclusa componente viscosa + pressione)</td>
+            <td colspan="6" style="color:var(--text-muted); font-size:0.84rem;">Somma di pressione e viscosa (Full-Car): &egrave; la forza finale che conta</td>
         </tr>
     """)
 
@@ -809,6 +813,8 @@ def build_diagnostic_reports(
                 <div class="chip-row">
                     <span class="coord-badge">X = Longitudinale &middot; Y = Verticale &middot; Z = Laterale (Z=0 simmetria)</span>
                     <span class="verified-badge">&#10003; {pdata.get('nodes_read', 0):,} nodi &amp; {pdata.get('faces_read', 0):,} facce reali verificate</span>
+                    <span class="coord-badge">{force_note}</span>
+                    <span class="coord-badge">dato viscoso: {visc_source}</span>
                 </div>
             </div>
         </div>
@@ -820,19 +826,19 @@ def build_diagnostic_reports(
     <!-- KPI DASHBOARD -->
     <div class="kpi-grid">
         <div class="kpi-card">
-            <div class="kpi-label">Deportanza Totale (CL &middot; A)</div>
-            <div class="kpi-value">{cl_a:.3f} m&sup2;</div>
-            <div class="kpi-sub">Forza -Fy = <strong>{df_n:.1f} N</strong> ({'2x Half-Car' if is_sym else 'Full-Car'})</div>
+            <div class="kpi-label">Deportanza Totale</div>
+            <div class="kpi-value">{df_n:.0f} N</div>
+            <div class="kpi-sub">CL&middot;A = <strong>{cl_a:.3f} m&sup2;</strong> &middot; lift Fluent = {lift_n:.1f} N<br/>{'2x Half-Car' if is_sym else 'Full-Car'}</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-label">Resistenza Totale (CD &middot; A)</div>
-            <div class="kpi-value">{cd_a:.3f} m&sup2;</div>
-            <div class="kpi-sub">Forza Fx = <strong>{drag_n:.1f} N</strong></div>
+            <div class="kpi-label">Resistenza Totale (Drag)</div>
+            <div class="kpi-value" style="color:#FF7A76;">{drag_n:.0f} N</div>
+            <div class="kpi-sub">CD&middot;A = <strong>{cd_a:.3f} m&sup2;</strong> &middot; pressione + viscosa</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-label">Efficienza Aerodinamica (L/D)</div>
+            <div class="kpi-label">Efficienza Aerodinamica (|L|/D)</div>
             <div class="kpi-value" style="color: #D8EEFC;">{l_d:.2f}</div>
-            <div class="kpi-sub">Rapporto CL / CD sull'assieme</div>
+            <div class="kpi-sub">Rapporto |deportanza| / resistenza sull'assieme</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Centro di Pressione (X_CoP)</div>
@@ -1094,8 +1100,8 @@ def build_diagnostic_reports(
         f"**Nodi 3D letti:** `{pdata.get('nodes_read', 0):,}` | **Facce 3D lette:** `{pdata.get('faces_read', 0):,}` | **Half-Car Simmetrico:** `{is_sym}`",
         "",
         "## Riepilogo KPI Aerodinamici Verificati",
-        f"- **Deportanza ($C_L \\cdot A$):** `{cl_a:.3f} m²` (`{df_n:.1f} N`)",
-        f"- **Resistenza ($C_D \\cdot A$):** `{cd_a:.3f} m²` (`{drag_n:.1f} N`)",
+        f"- **Deportanza totale:** `{df_n:.1f} N` ($C_L \\cdot A$ = `{cl_a:.3f} m²`, lift Fluent = `{lift_n:.1f} N`)",
+        f"- **Resistenza totale (drag):** `{drag_n:.1f} N` ($C_D \\cdot A$ = `{cd_a:.3f} m²`)",
         f"- **Efficienza ($L/D$):** `{l_d:.2f}`",
         f"- **Centro di Pressione ($X_{{\\text{{CoP}}}}$):** `{cop_pct:.1f}% L` (`X = {cop_x:.3f} m`)",
         f"- **Superficie con $\\tau_{{w,x}} \\le 0$ (Stallo):** `{stall_val:.2f}%`",

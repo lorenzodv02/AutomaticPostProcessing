@@ -874,10 +874,17 @@ class AeroDiagnosticsGUI:
         cas_card.grid(row=0, column=0, sticky="ew", padx=(0, 5))
         pid_card, self.stat_pid = self._stat_card(stats, "PID ISOLATI", "—", VIOLET_SOFT)
         pid_card.grid(row=0, column=1, sticky="ew", padx=5)
-        meta_found = bool(find_meta_executable(
+        from meta_locator import describe_meta
+
+        meta_info = describe_meta(find_meta_executable(
             self.config.get("meta", {}).get("executable_path", "auto")))
+        meta_found = bool(meta_info["found"])
+        if meta_found and meta_info["version"]:
+            meta_value = "v" + meta_info["version"]
+        else:
+            meta_value = "OK" if meta_found else "N/D"
         meta_card, self.stat_meta = self._stat_card(
-            stats, "META POST", "OK" if meta_found else "N/D",
+            stats, "META POST", meta_value,
             SUCCESS if meta_found else WARNING)
         meta_card.grid(row=0, column=2, sticky="ew", padx=(5, 0))
 

@@ -48,10 +48,42 @@ from config_bridge import (
 #   * `vertical_force_y_N` e' l'alias esplicito della stessa grandezza;
 #   * i campi `drag_*` riportano il modulo, sempre >= 0.
 # ---------------------------------------------------------------------------
+# In Fluent il report si definisce come "lift" o "downforce":
+#   * definizione **lift** (default Fluent): la forza e' proiettata su +Y, quindi
+#     un'ala che genera deportanza da' **lift negativo**;
+#   * definizione **downforce**: il segno e' invertito (deportanza positiva).
+# Il parser legge la fisica (proiezione su +Y) e poi applica la convenzione
+# richiesta, cosi' i numeri del report coincidono con quelli del setup Fluent.
+FORCE_CONVENTIONS = ("lift", "downforce")
+
 SIGN_CONVENTION_NOTE = (
-    "F = p_rel * A * n ; +Y verso l'alto ; downforce_* = risultante verticale con "
-    "segno (negativa = spinta verso il basso) ; drag_* = modulo"
+    "F = p_rel * A * n ; +Y verso l'alto ; convenzione 'lift': downforce_* e' la "
+    "proiezione su +Y (negativa = spinta verso il basso) ; convenzione 'downforce': "
+    "segno invertito (positiva = spinta verso il basso) ; drag_* = modulo"
 )
+
+
+def normalize_force_convention(value) -> str:
+    """Normalizza la convenzione del report forze ('lift' | 'downforce')."""
+    text = str(value or "").strip().lower()
+    return text if text in FORCE_CONVENTIONS else "lift"
+
+
+def center_of_pressure_x(x_coords, lift_elems):
+    """
+    Ascissa del centro di pressione pesata sulla **deportanza** degli elementi.
+
+    Gli elementi che generano portanza (lift positivo) non devono spostare il
+    CoP: si pesa solo la parte che preme verso il basso. Restituisce None se non
+    c'e' deportanza (il chiamante ricade sul centro geometrico).
+    """
+    import numpy as np
+
+    weights = np.maximum(-np.asarray(lift_elems, dtype=float), 0.0)
+    total = float(np.sum(weights))
+    if total <= 1e-9:
+        return None
+    return float(np.sum(np.asarray(x_coords, dtype=float) * weights) / total)
 
 
 DOMAIN_KEYWORDS = [
@@ -402,6 +434,7 @@ def extract_real_mesh_and_cfd_data(
     assembly_type: str = "undertray",
     ref_values: dict = None,
     config: dict = None,
+    force_convention: str = "lift",
     log_fn=print
 ) -> dict:
     """
@@ -412,6 +445,9 @@ def extract_real_mesh_and_cfd_data(
     """
     if ref_values is None:
         ref_values = {}
+    force_convention = normalize_force_convention(force_convention)
+    # +1 = numeri come Fluent "lift"; -1 = come Fluent "downforce"
+    force_sign = -1.0 if force_convention == "downforce" else 1.0
     if cas_info is None:
         cas_info = inspect_fluent_cas_zones(cas_path, requested_assembly=assembly_type, config=config)
     if not assembly_type or assembly_type == "auto":
@@ -1048,19 +1084,22 @@ def extract_real_mesh_and_cfd_data(
         pid_drag_visc = abs(pid_fx_visc)
         pid_drag_total = pid_drag_press + pid_drag_visc
 
-        # Downforce del PID = Downforce Pressione + Downforce Viscosa (CON SEGNO REALE: non usare abs!)
-        # Nel sistema di coordinate di Fluent, fy_p > 0 corrisponde a spinta verso il basso (deportanza reale),
-        # mentre fy_p < 0 indica spinta verso l'alto (portanza / lift di elementi come ruote, casco pilota, sospensioni).
-        # Per la componente viscosa, lo sforzo viscoso verticale oppone il flusso (-pid_fy_visc).
+        # Risultante verticale del PID = Pressione + Viscosa, **proiettata su +Y**
+        # (come il report "lift" di Fluent): negativa = spinta verso il basso.
+        # Per la componente viscosa, lo sforzo viscoso verticale oppone il flusso.
+        # `pid_df_*` tiene il segno fisico (lift); `force_sign` applica poi la
+        # convenzione scelta per la presentazione (lift o downforce).
         pid_df_press = pid_fy_press
         pid_df_visc = -pid_fy_visc
         pid_df_total = pid_df_press + pid_df_visc
 
-        df_p_1x = pid_df_press
+        lift_1x = pid_df_total
+        lift_2x = round(lift_1x * sym_multiplier, 2)
+        df_p_1x = pid_df_press * force_sign
         df_p_2x = round(df_p_1x * sym_multiplier, 2)
-        df_v_1x = pid_df_visc
+        df_v_1x = pid_df_visc * force_sign
         df_v_2x = round(df_v_1x * sym_multiplier, 2)
-        df_1x = pid_df_total
+        df_1x = pid_df_total * force_sign
         df_2x = round(df_1x * sym_multiplier, 2)
 
         dr_p_1x = pid_drag_press
@@ -1089,6 +1128,8 @@ def extract_real_mesh_and_cfd_data(
             "downforce_viscous_2x_N": df_v_2x,
             "downforce_1x_N": round(df_1x, 2),
             "downforce_2x_N": df_2x,
+            "lift_1x_N": round(lift_1x, 2),
+            "lift_2x_N": lift_2x,
             "drag_pressure_1x_N": round(dr_p_1x, 2),
             "drag_pressure_2x_N": dr_p_2x,
             "drag_viscous_1x_N": round(dr_v_1x, 2),
@@ -1150,21 +1191,24 @@ def extract_real_mesh_and_cfd_data(
     cl_val = downforce_N / _q_area if _q_area > 1e-9 else 0.0
     cd_val = drag_N / _q_area if _q_area > 1e-9 else 0.0
 
+    # Risultante verticale fisica (proiezione su +Y): alias del report "lift".
+    lift_N = sum(p["lift_2x_N"] for p in per_pid_breakdown)
+
     # Per compatibilita' con i calcoli cumulativi:
-    total_fy_raw = downforce_N
+    total_fy_raw = lift_N
     total_fx_raw = drag_N
     downforce_elem = all_df_elem  # Mantiene il segno reale (elementi con portanza sottraggono carico)
     drag_elem = all_drag_elem
 
-    # Calcolo REALE del Centro di Pressione Longitudinale X_CoP
+    # Calcolo REALE del Centro di Pressione Longitudinale X_CoP.
+    # `downforce_elem` e' la lift per elemento (proiezione su +Y): si pesa la
+    # sola parte che preme verso il basso, altrimenti (tutti valori negativi
+    # filtrati con maximum(.,0)) si ricadrebbe sempre sul centro geometrico.
     xmin_m = float(np.min(all_x))
     xmax_m = float(np.max(all_x))
     L_m = max(xmax_m - xmin_m, 1e-4)
-    weights_df = np.maximum(downforce_elem, 0.0)
-    if np.sum(weights_df) > 1e-6:
-        cop_x_m = float(np.sum(all_x * weights_df) / np.sum(weights_df))
-    else:
-        cop_x_m = 0.5 * (xmin_m + xmax_m)
+    cop_weighted = center_of_pressure_x(all_x, downforce_elem)
+    cop_x_m = cop_weighted if cop_weighted is not None else 0.5 * (xmin_m + xmax_m)
     cop_x_pct = (cop_x_m - xmin_m) / L_m * 100.0
 
     # Percentuale reale di area con flusso invertito / separazione dello strato limite (Tau_w,x <= 0)
@@ -1236,14 +1280,22 @@ def extract_real_mesh_and_cfd_data(
         if np.any(in_z):
             cl_span_actual[bz] = float(np.sum(downforce_elem[in_z]) * sym_multiplier / q_inf) * n_bins_z
 
-    # Se il modello e' Half-Car Simmetrico (zona 'symmetry' presente), l'asimmetria laterale e' 0.0% per condizione al contorno!
+    # Asimmetria laterale tra le due meta' del veicolo.
+    # Si confrontano i MODULI del carico (non i valori con segno): con il segno,
+    # due semiali di segno opposto darebbero 200%, un valore senza significato.
+    # 0% = carico perfettamente ripartito, 100% = carico tutto da una parte.
     if is_half_car:
+        # Half-Car + condizione di simmetria: l'asimmetria e' nulla per definizione
         asymmetry_pct = 0.0
     else:
         half_z = n_bins_z // 2
-        l_load = float(np.mean(cl_span_actual[:half_z]))
-        r_load = float(np.mean(cl_span_actual[half_z:]))
-        asymmetry_pct = abs(r_load - l_load) / max(0.5 * (abs(r_load) + abs(l_load)), 1e-6) * 100.0
+        left_load = float(np.sum(np.abs(downforce_elem[all_z <= z_edges[half_z]])))
+        right_load = float(np.sum(np.abs(downforce_elem[all_z > z_edges[half_z]])))
+        mean_load = 0.5 * (left_load + right_load)
+        if mean_load > 1e-9:
+            asymmetry_pct = min(100.0, abs(right_load - left_load) / mean_load * 100.0)
+        else:
+            asymmetry_pct = 0.0
 
     # 10 stazioni X-Cut calcolate sui dati reali lungo l'intera lunghezza
     x_cut_stations = [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.98]
@@ -1293,6 +1345,9 @@ def extract_real_mesh_and_cfd_data(
                 "dynamic_pressure_pa": round(q_inf, 2),
                 "downforce_N": round(downforce_N, 1),
                 "downforce_total_N": round(downforce_N, 1),
+                "lift_N": round(lift_N, 1),
+                "lift_total_N": round(lift_N, 1),
+                "force_convention": force_convention,
                 "downforce_pressure_total_N": round(downforce_pressure_N, 1),
                 "downforce_viscous_total_N": round(downforce_viscous_N, 1),
                 "drag_N": round(drag_N, 1),
@@ -1303,7 +1358,7 @@ def extract_real_mesh_and_cfd_data(
                 "CD": round(cd_val, 4),
                 "reference_area_m2": round(ref_area_m2, 4),
                 "viscous_source": viscous_source_global,
-                "vertical_force_y_N": round(downforce_N, 1),
+                "vertical_force_y_N": round(lift_N, 1),
                 "sign_convention": SIGN_CONVENTION_NOTE,
                 "CL_A": round(cla_val, 3),
                 "cl_a_total": round(cla_val, 3),

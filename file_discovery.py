@@ -17,14 +17,16 @@ import os
 
 __all__ = ["NoCaseFilesFound", "discover_cas_dat", "try_discover", "case_files_in", "ignored_files"]
 
-CAS_PATTERNS = ("*.cas", "*.cas.h5", "*.cas.gz")
-DAT_PATTERNS = ("*.dat", "*.dat.h5", "*.dat.gz")
+# Solo il formato Fluent "legacy" binario: .cas/.dat compressi o HDF5
+# (.cas.h5, .cas.gz) NON sono supportati dal parser, quindi non si cercano.
+CAS_PATTERNS = ("*.cas",)
+DAT_PATTERNS = ("*.dat",)
 
 # Nomi che condividono l'estensione ma non sono dataset CFD
 DENY_SUBSTRINGS = ("license", "licence", ".lic", "licenza")
 
-_CAS_SUFFIXES = (".cas.h5", ".cas.gz", ".cas")
-_DAT_SUFFIXES = (".dat.h5", ".dat.gz", ".dat")
+_CAS_SUFFIXES = (".cas",)
+_DAT_SUFFIXES = (".dat",)
 
 
 class NoCaseFilesFound(RuntimeError):
@@ -32,7 +34,7 @@ class NoCaseFilesFound(RuntimeError):
 
 
 def _stem(path: str) -> str:
-    """Nome del file senza l'estensione CFD (gestisce .cas.h5 e .dat.gz)."""
+    """Nome del file senza l'estensione CFD (.cas / .dat)."""
     base = os.path.basename(path)
     lowered = base.lower()
     for suffix in _CAS_SUFFIXES + _DAT_SUFFIXES:

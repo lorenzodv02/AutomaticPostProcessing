@@ -74,14 +74,22 @@ def test_dat_is_paired_by_stem():
         shutil.rmtree(folder, ignore_errors=True)
 
 
-def test_h5_case_is_recognised():
+def test_h5_and_gz_are_ignored():
+    """Solo .cas e .dat: .cas.h5/.gz non sono leggibili dal parser, quindi si ignorano."""
     folder = _temp_dir()
     try:
         _write(folder, "caso.cas.h5")
-        _write(folder, "caso.dat")
-        cas_file, dat_file = discover_cas_dat(folder)
-        assert cas_file.endswith("caso.cas.h5")
-        assert os.path.basename(dat_file) == "caso.dat"
+        _write(folder, "caso.dat.gz")
+        cas_files, dat_files = case_files_in(folder)
+        assert cas_files == [], cas_files
+        assert dat_files == [], dat_files
+
+        raised = False
+        try:
+            discover_cas_dat(folder)
+        except NoCaseFilesFound:
+            raised = True
+        assert raised, "senza .cas/.dat la scoperta deve fallire"
     finally:
         shutil.rmtree(folder, ignore_errors=True)
 

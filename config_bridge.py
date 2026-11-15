@@ -39,6 +39,7 @@ __all__ = [
     "assembly_profile",
     "assembly_keywords",
     "cut_stations",
+    "force_convention",
     "thresholds",
     "cp_range",
     "reference_values",
@@ -73,6 +74,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "viscosity_mu": 1.7894e-5,
         "reference_area": 1.08,
         "wheelbase": 1.535,
+        # Convenzione del report forze, come la definisce Fluent:
+        #   "lift"      -> proiezione su +Y (deportanza negativa) [default Fluent]
+        #   "downforce" -> segno invertito (deportanza positiva)
+        "report_force_convention": "lift",
     },
     "meta": {
         "executable_path": "auto",
@@ -277,6 +282,20 @@ def cut_stations(config: Dict[str, Any], assembly_type: str) -> Tuple[List[float
     x_stations = _sanitize_stations(profile.get("x_cuts_normalized"), DEFAULT_X_STATIONS)
     z_stations = _sanitize_stations(profile.get("z_cuts_normalized"), DEFAULT_Z_STATIONS)
     return x_stations, z_stations
+
+
+def force_convention(config: Dict[str, Any]) -> str:
+    """
+    Convenzione del report forze richiesta ("lift" o "downforce").
+
+    In Fluent si sceglie la definizione del report: con "lift" la forza e'
+    proiettata su +Y (deportanza negativa), con "downforce" il segno e'
+    invertito. Qui si legge la preferenza e si normalizza a quei due valori.
+    """
+    raw = _deep_merge(DEFAULT_CONFIG["reference_values"],
+                      _as_dict(_as_dict(config).get("reference_values")))
+    value = str(raw.get("report_force_convention", "lift") or "lift").strip().lower()
+    return value if value in ("lift", "downforce") else "lift"
 
 
 def thresholds(config: Dict[str, Any], assembly_type: str) -> Dict[str, float]:

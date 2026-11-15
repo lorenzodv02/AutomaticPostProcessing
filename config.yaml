@@ -41,12 +41,20 @@ reference_values:
   reference_area: 1.08      # Area frontale di riferimento A [m^2]: usata per CL = Df/(q*A) e CD = Tr/(q*A)
                             #   (CL*A e CD*A ne sono indipendenti, come deve essere)
   wheelbase: 1.535         # Passo vettura [m]
+  report_force_convention: "lift"
+                            # Convenzione del report forze, come in Fluent:
+                            #   "lift"      -> proiezione su +Y, deportanza NEGATIVA (default Fluent)
+                            #   "downforce" -> segno invertito, deportanza POSITIVA
+                            # Se in Fluent hai definito il report come "downforce", metti "downforce"
+                            # per avere nel report gli stessi numeri (e lo stesso segno) del setup.
 
 # Configurazione BETA CAE META Post
 meta:
   # Percorso BETA CAE META Post v25.1 (o "auto" per ricerca automatica nei percorsi standard Windows)
   executable_path: "auto"
   batch_mode: true
+  batch_timeout_s: 360     # Secondi massimi concessi a META Post prima di proseguire
+                           # (le immagini vengono comunque generate in Python)
   image_width: 1920
   image_height: 1080
   background_color: "white"
