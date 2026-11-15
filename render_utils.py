@@ -50,6 +50,22 @@ def _fill_holes(grid, passes: int = 6):
     return out
 
 
+def side_mask(normals, axis: int = 1, sign: int = -1, threshold: float = 0.15):
+    """
+    Maschera dei triangoli che appartengono a un lato della superficie.
+
+    Serve a distinguere davvero la vista "lato aspirazione" (-Y) dalla vista
+    superiore (+Y): senza filtro si proiettano entrambi i lati e le due immagini
+    risultano quasi identiche.
+    """
+    if normals is None:
+        return None
+    normals = np.asarray(normals, dtype=float)
+    if normals.ndim != 2 or normals.shape[1] <= axis:
+        return None
+    return normals[:, axis] * float(sign) > float(threshold)
+
+
 def rasterize_surface(ax, x, y, triangles, facecolors, cmap, vmin, vmax,
                       max_points: int = MAX_POINTS):
     """
@@ -168,17 +184,20 @@ def combine_zone_meshes(
     avail_for_large = max(5000, target_half - small_tris_sum)
 
     all_pts, all_tris, all_cp, all_taux, all_tke, all_pid_idx, pid_labels = [], [], [], [], [], [], []
+    all_normals = []
     offset = 0
 
     for pid_i, zid, zm, pts, tris in valid_zones:
         n_pts = pts.shape[0]
         n_tris = tris.shape[0]
 
+        normals = zm.get("normals")
         if total_raw_tris <= target_half or n_tris <= small_threshold:
             tris_sub = tris
             cp_sub = zm["cp"]
             taux_sub = zm["tau_x"]
             tke_sub = zm["tke"]
+            normals_sub = normals
         else:
             weight = n_tris / max(large_raw_sum, 1)
             allocated = max(small_threshold, int(avail_for_large * weight))
@@ -188,6 +207,7 @@ def combine_zone_meshes(
             cp_sub = zm["cp"][sel]
             taux_sub = zm["tau_x"][sel]
             tke_sub = zm["tke"][sel]
+            normals_sub = normals[sel] if normals is not None else None
 
         all_pts.append(pts)
         all_tris.append(tris_sub + offset)
@@ -195,6 +215,8 @@ def combine_zone_meshes(
         all_taux.append(taux_sub)
         all_tke.append(tke_sub)
         all_pid_idx.append(np.full(tris_sub.shape[0], pid_i, dtype=np.int32))
+        if normals_sub is not None and len(normals_sub) == tris_sub.shape[0]:
+            all_normals.append(np.asarray(normals_sub, dtype=float))
         pid_labels.append({
             "pid_index": pid_i,
             "zone_id": zid,
@@ -213,14 +235,22 @@ def combine_zone_meshes(
             all_taux.append(taux_sub)
             all_tke.append(tke_sub)
             all_pid_idx.append(np.full(tris_sub.shape[0], pid_i, dtype=np.int32))
+            if normals_sub is not None and len(normals_sub) == tris_sub.shape[0]:
+                all_normals.append(np.asarray(normals_sub, dtype=float))
             offset += n_pts
 
     if not all_pts:
         return None
 
+    total_tris = sum(arr.shape[0] for arr in all_tris)
+    normals_full = None
+    if all_normals and sum(arr.shape[0] for arr in all_normals) == total_tris:
+        normals_full = np.vstack(all_normals)
+
     return {
         "pts": np.vstack(all_pts),
         "tris": np.vstack(all_tris),
+        "normals": normals_full,
         "cp": np.concatenate(all_cp),
         "tau_x": np.concatenate(all_taux),
         "tke": np.concatenate(all_tke),

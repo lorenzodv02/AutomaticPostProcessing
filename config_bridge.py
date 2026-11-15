@@ -41,6 +41,7 @@ __all__ = [
     "cut_stations",
     "force_convention",
     "validate_config",
+    "manual_zone_ids",
     "wheelbase_reference",
     "EXPECTED_AXES",
     "thresholds",
@@ -396,6 +397,31 @@ def wheelbase_reference(config: Dict[str, Any]) -> Tuple[float, float]:
     if isinstance(front, (int, float)) and isinstance(rear, (int, float)):
         return float(front), float(rear)
     return 0.0, 0.0
+
+
+def manual_zone_ids(config: Dict[str, Any], assembly_type: str) -> List[int]:
+    """
+    Id delle zone wall scelte a mano per un assieme (`assemblies.<t>.manual_zone_ids`).
+
+    Quando la lista è popolata, il filtro automatico per keyword viene ignorato:
+    serve a far coincidere il computo delle forze con quello fatto in Fluent
+    (dove l'utente seleziona a mano le zone del report).
+    """
+    asm = str(assembly_type or "").strip().lower()
+    raw = _as_dict(config).get("assemblies")
+    if not isinstance(raw, dict):
+        return []
+    profile = _as_dict(raw.get(asm))
+    values = profile.get("manual_zone_ids")
+    if not isinstance(values, (list, tuple)):
+        return []
+    ids: List[int] = []
+    for item in values:
+        try:
+            ids.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    return ids
 
 
 def force_convention(config: Dict[str, Any]) -> str:

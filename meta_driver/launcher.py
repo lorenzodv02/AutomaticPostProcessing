@@ -17,6 +17,7 @@ import glob
 import json
 import shutil
 import subprocess
+import warnings
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -33,6 +34,7 @@ from meta_driver.ses_generator import generate_meta_session_file
 from render_utils import (
     combine_zone_meshes as _combine_real_zone_meshes,
     rasterize_surface as _rasterize_surface,
+    side_mask as _side_mask,
 )
 from config_bridge import (
     cp_range as resolve_cp_range,
@@ -93,6 +95,11 @@ def _is_valid_meta_screenshot(img_path: str) -> bool:
         return True
     except Exception:
         return False
+
+
+# `tight_layout` avvisa quando i margini non bastano (viste molto larghe): e'
+# cosmetico e non deve sporcare lo stderr dell'applicazione.
+warnings.filterwarnings("ignore", message="Tight layout not applied")
 
 
 def _safe_tripcolor(
@@ -496,6 +503,7 @@ def _render_real_unpacked_mesh_views(
 
     pts = mesh_full["pts"]
     tris = mesh_full["tris"]
+    tri_normals = (mesh_full or {}).get("normals")
     cp_vals = mesh_full["cp"]
     taux_vals = mesh_full["tau_x"]
     tke_vals = mesh_full["tke"]
@@ -591,7 +599,12 @@ def _render_real_unpacked_mesh_views(
     p1 = os.path.join(images_dir, fname1)
     if not _is_valid_meta_screenshot(p1):
         fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
-        order_bot = np.argsort(-tri_centers[:, 1])  # Triangoli con Y minore (fondo inferiore) disegnati sopra
+        # Solo le facce che guardano verso il basso (-Y): senza filtro la vista
+        # "lato aspirazione" proiettava anche il lato superiore e usciva identica
+        # alla vista Top.
+        mask_bottom = _side_mask(tri_normals, axis=1, sign=-1, threshold=0.15)
+        sel_bottom = np.where(mask_bottom)[0] if mask_bottom is not None else np.arange(len(tris))
+        order_bot = sel_bottom[np.argsort(-tri_centers[sel_bottom, 1])]
         im = _safe_tripcolor(ax, pts[:, 0], pts[:, 2], tris[order_bot], cp_vals[order_bot], cmap="jet", vmin=vmin_cp_global, vmax=vmax_cp_global, shading="flat")
         if is_sym:
             ax.axhline(0.0, color="#1e293b", linestyle="--", linewidth=1.2, alpha=0.7)
@@ -631,7 +644,11 @@ def _render_real_unpacked_mesh_views(
     p2 = os.path.join(images_dir, fname2)
     if not _is_valid_meta_screenshot(p2):
         fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
-        order_top = np.argsort(tri_centers[:, 1])  # Triangoli con Y maggiore disegnati sopra
+        # Solo le facce che guardano verso l'alto (+Y): la vista superiore deve
+        # mostrare il lato pressione, non la proiezione di tutto il modello.
+        mask_top = _side_mask(tri_normals, axis=1, sign=+1, threshold=0.15)
+        sel_top = np.where(mask_top)[0] if mask_top is not None else np.arange(len(tris))
+        order_top = sel_top[np.argsort(tri_centers[sel_top, 1])]
         im = _safe_tripcolor(ax, pts[:, 0], pts[:, 2], tris[order_top], cp_vals[order_top], cmap="jet", vmin=vmin_cp_global, vmax=vmax_cp_global, shading="flat")
         if is_sym:
             ax.axhline(0.0, color="#1e293b", linestyle="--", linewidth=1.2, alpha=0.7)

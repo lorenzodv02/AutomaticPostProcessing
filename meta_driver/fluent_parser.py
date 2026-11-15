@@ -29,6 +29,7 @@ import numpy as np
 from config_bridge import (
     ASSEMBLY_KEYWORDS_FALLBACK,
     assembly_keywords,
+    manual_zone_ids,
     reference_values as resolve_reference_values,
 )
 
@@ -168,6 +169,15 @@ def filter_zones_for_assembly(aero_zones: list, assembly_type: str, config: dict
     non puo' quindi far sparire un PID che prima era riconosciuto.
     """
     asm = str(assembly_type or "").strip().lower()
+
+    # Selezione manuale dalla GUI: se l'utente ha scelto le zone wall, quelle
+    # valgono su tutto (anche per full_car) e il filtro per keyword non si applica.
+    manual = manual_zone_ids(config, asm)
+    if manual:
+        chosen = [z for z in aero_zones if int(z.get("id", -1)) in manual]
+        if chosen:
+            return chosen
+
     if asm == "full_car":
         return list(aero_zones)
 

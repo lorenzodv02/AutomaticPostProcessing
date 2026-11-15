@@ -25,7 +25,7 @@ import brand
 from brand import asset_path as brand_asset
 from brand import families as brand_families
 from analyzer.ai_vision_advisor import AI_PROVIDERS
-from config_bridge import validate_config
+from config_bridge import manual_zone_ids, validate_config
 from meta_driver.launcher import find_meta_executable
 from file_discovery import try_discover
 from meta_driver.fluent_parser import inspect_fluent_cas_zones
@@ -405,13 +405,13 @@ class GradientStrip(tk.Canvas):
 class ScrollableFrame(tk.Frame):
     """Contenitore verticalmente scorrevole con scrollbar che appare solo se serve."""
 
-    def __init__(self, master, **kwargs):
-        super().__init__(master, bg=BG, **kwargs)
-        self.canvas = tk.Canvas(self, bg=BG, bd=0, highlightthickness=0)
+    def __init__(self, master, bg=BG, **kwargs):
+        super().__init__(master, bg=bg, **kwargs)
+        self.canvas = tk.Canvas(self, bg=bg, bd=0, highlightthickness=0)
         self.scrollbar = ttk.Scrollbar(self, orient="vertical",
                                        command=self.canvas.yview,
                                        style="Modern.Vertical.TScrollbar")
-        self.inner = tk.Frame(self.canvas, bg=BG)
+        self.inner = tk.Frame(self.canvas, bg=bg)
         self._window = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -505,6 +505,9 @@ class AeroDiagnosticsGUI:
         self.log_queue = queue.Queue()
         self._icon = None
         self._ai_check_running = False
+        self._zone_vars = {}
+        self._zone_catalog = []
+        self._zone_mode = "auto"
 
         # ------------------------------------------------------------------ vars
         project = self.config.get("project", {})
@@ -674,6 +677,9 @@ class AeroDiagnosticsGUI:
         right.grid_rowconfigure(1, weight=1)
 
         self._build_source_card(self.left.inner)
+        # Prima la scelta delle zone (serve a far tornare i conti con Fluent),
+        # poi i parametri di esecuzione.
+        self._build_zone_card(self.left.inner)
         self._build_execution_card(self.left.inner)
         self._build_action_card(right)
         self._build_log_card(right)
@@ -843,6 +849,120 @@ class AeroDiagnosticsGUI:
             kind="ghost", font=(FONT_UI, 8, "bold"),
         )
         self.btn_ai_check.pack(side=tk.LEFT, padx=(6, 0))
+
+    # ------------------------------------------------------------ selezione zone
+    def _build_zone_card(self, parent):
+        """
+        Selezione manuale delle zone **wall** incluse nel computo delle forze.
+
+        Serve quando il numero di Fluent non coincide: si sceglie lo stesso
+        elenco di zone usato nel report Fluent.
+        """
+        outer, body = card(
+            parent, "PID nel computo",
+            "Zone wall incluse nel calcolo delle forze: selezionale come nel report Fluent",
+            accent=VIOLET_SOFT,
+        )
+        outer.pack(fill=tk.X, pady=(0, 12))
+
+        self.lbl_zone_count = tk.Label(
+            body, text="Nessun .cas analizzato", bg=SURFACE, fg=FAINT,
+            font=(FONT_UI, 8), justify="left", anchor="w",
+        )
+        self.lbl_zone_count.pack(fill=tk.X, pady=(0, 6))
+
+        self.zone_scroll = ScrollableFrame(body, bg=SURFACE)
+        self.zone_scroll.canvas.configure(height=150)
+        self.zone_scroll.pack(fill=tk.X)
+
+        actions = tk.Frame(body, bg=SURFACE)
+        actions.pack(fill=tk.X, pady=(8, 0))
+        FlatButton(actions, "Tutti", command=lambda: self._set_all_zones(True),
+                   kind="ghost", font=(FONT_UI, 8, "bold")).pack(side=tk.LEFT)
+        FlatButton(actions, "Nessuno", command=lambda: self._set_all_zones(False),
+                   kind="ghost", font=(FONT_UI, 8, "bold")).pack(side=tk.LEFT, padx=(4, 0))
+        FlatButton(actions, "Automatico", command=self._reset_zone_selection,
+                   kind="secondary", font=(FONT_UI, 8, "bold")).pack(side=tk.RIGHT)
+
+    def _populate_zone_list(self, info: dict, asm_key: str):
+        """Riempie le checkbox con le zone wall del .cas appena letto."""
+        for child in self.zone_scroll.inner.winfo_children():
+            child.destroy()
+        self._zone_vars.clear()
+        self._zone_catalog = []
+
+        aero = info.get("aero_zones") or []
+        target_ids = {int(z.get("id", -1)) for z in (info.get("target_zones") or [])}
+        manual = set(manual_zone_ids(self.config, asm_key))
+        self._zone_mode = "manual" if manual else "auto"
+        selected = manual if manual else target_ids
+
+        for zone in sorted(aero, key=lambda z: str(z.get("name", ""))):
+            try:
+                zid = int(zone.get("id", -1))
+            except (TypeError, ValueError):
+                continue
+            if zid < 0:
+                continue
+            var = tk.BooleanVar(value=zid in selected)
+            names = zone.get("raw_names") or []
+            label = str(zone.get("name", "?"))
+            detail = "" if len(names) <= 1 else "  (%d nomi)" % len(names)
+            chk = tk.Checkbutton(
+                self.zone_scroll.inner, text="%s  · id %d%s" % (label, zid, detail),
+                variable=var, command=self._on_zone_toggle,
+                bg=SURFACE, fg=TEXT_SOFT, activebackground=SURFACE,
+                activeforeground=TEXT, selectcolor=ACCENT,
+                bd=0, highlightthickness=0, anchor="w", font=(FONT_UI, 8),
+            )
+            chk.pack(anchor="w", padx=2)
+            self._zone_vars[zid] = var
+            self._zone_catalog.append({"id": zid, "name": label})
+        self._update_zone_summary()
+
+    def _on_zone_toggle(self):
+        self._zone_mode = "manual"
+        self._update_zone_summary()
+
+    def _set_all_zones(self, value: bool):
+        for var in self._zone_vars.values():
+            var.set(bool(value))
+        self._zone_mode = "manual"
+        self._update_zone_summary()
+
+    def _reset_zone_selection(self):
+        """Torna alla selezione automatica per keyword."""
+        if not self._zone_catalog:
+            return
+        self._zone_mode = "auto"
+        self.config.get("assemblies", {}).get(self._assembly_key(), {}).pop("manual_zone_ids", None)
+        self._log("[ZONE] Selezione automatica ripristinata.")
+        self._update_zone_summary()
+
+    def _update_zone_summary(self):
+        total = len(self._zone_vars)
+        if not total:
+            self.lbl_zone_count.configure(text="Nessun .cas analizzato", fg=FAINT)
+            return
+        chosen = sum(1 for var in self._zone_vars.values() if var.get())
+        mode = "manuale" if self._zone_mode == "manual" else "automatica"
+        self.lbl_zone_count.configure(
+            text="Zone wall: %d  ·  incluse: %d  ·  selezione %s" % (total, chosen, mode),
+            fg=TEXT_SOFT if chosen else DANGER,
+        )
+
+    def _apply_zone_selection_to_config(self):
+        """Scrive la scelta nel config (o la rimuove se si usa l'automatico)."""
+        asm_key = self._assembly_key()
+        profile = self.config.setdefault("assemblies", {}).setdefault(asm_key, {})
+        if self._zone_mode == "manual" and self._zone_vars:
+            ids = [zid for zid, var in self._zone_vars.items() if var.get()]
+            if ids:
+                profile["manual_zone_ids"] = ids
+                self._log("[ZONE] Zone wall selezionate a mano: %d (id %s)"
+                          % (len(ids), ", ".join(str(i) for i in sorted(ids))))
+                return
+        profile.pop("manual_zone_ids", None)
 
     # ------------------------------------------------------------------ right column
     def _build_action_card(self, parent):
@@ -1130,6 +1250,7 @@ class AeroDiagnosticsGUI:
             text=f"Zone isolate: {len(target_names)} PID  ·  "
                  f"modello {'half-car simmetrico' if symmetric else 'full-domain'}"
         )
+        self._populate_zone_list(info, asm_key)
         self._log("─" * 76)
         self._log(f"[SCAN] {os.path.basename(cas_file)} · {size_mb} MB  |  "
                   f"assieme {asm_key.upper()}")
@@ -1217,6 +1338,7 @@ class AeroDiagnosticsGUI:
             ai_cfg = self.config.setdefault("ai_vision", {})
         ai_cfg["api_key"] = self.var_apikey.get().strip()
         ai_cfg["provider"] = self.var_provider.get().strip().lower()
+        self._apply_zone_selection_to_config()
 
         self._busy = True
         self.btn_run.set_enabled(False)

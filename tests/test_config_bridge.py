@@ -229,3 +229,33 @@ def test_wheelbase_reference_helper():
     config["reference_values"]["front_axle_x"] = 0.1
     config["reference_values"]["rear_axle_x"] = 1.6
     assert cb.wheelbase_reference(config) == (0.1, 1.6)
+
+def _zones():
+    return [
+        {"id": 3, "name": "flat_floor", "type": "wall", "zone_ids": [3]},
+        {"id": 4, "name": "venturi", "type": "wall", "zone_ids": [4]},
+        {"id": 9, "name": "tyre_front", "type": "wall", "zone_ids": [9]},
+    ]
+
+
+def test_manual_zone_ids_disables_keyword_filter():
+    """Con la selezione manuale il filtro per keyword non deve scartare nulla."""
+    from meta_driver.fluent_parser import filter_zones_for_assembly
+
+    config = {"assemblies": {"undertray": {"manual_zone_ids": [3, 9]}}}
+    selected = filter_zones_for_assembly(_zones(), "undertray", config)
+    assert [z["id"] for z in selected] == [3, 9]
+
+
+def test_manual_zone_ids_apply_to_full_car():
+    from meta_driver.fluent_parser import filter_zones_for_assembly
+
+    config = {"assemblies": {"full_car": {"manual_zone_ids": ["4"]}}}
+    selected = filter_zones_for_assembly(_zones(), "full_car", config)
+    assert [z["id"] for z in selected] == [4]
+
+
+def test_manual_zone_ids_ignores_unknown_values():
+    config = {"assemblies": {"undertray": {"manual_zone_ids": ["x", None, 4]}}}
+    assert cb.manual_zone_ids(config, "undertray") == [4]
+    assert cb.manual_zone_ids(config, "full_car") == []
