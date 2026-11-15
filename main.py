@@ -32,24 +32,12 @@ from config_bridge import load_config as load_config_file
 from config_bridge import validate_config
 from file_discovery import NoCaseFilesFound, try_discover
 from meta_driver.fluent_parser import extract_real_mesh_and_cfd_data
+from meta_driver.entry_modes import should_hide_console, started_without_arguments
 from meta_driver.geometry import extract_geometry
 from version import __version__
 
 # Percorso del config.yaml effettivamente usato (None = default interni)
 LAST_CONFIG_PATH = None
-
-
-def _launch_gui_by_default(argc: int) -> bool:
-    """
-    Vero quando il programma e' stato avviato senza argomenti.
-
-    Un doppio clic sull'eseguibile passa un solo argomento (sys.argv[0]): in quel
-    caso si apre la GUI. Prima invece partiva la pipeline sulla cartella corrente,
-    scegliendo qualunque `*.cas`/`*.dat` presente (su un Desktop poteva essere la
-    licenza di BETA CAE) e finendo in un traceback. Con `-w`, `-a` o `--config`
-    resta la pipeline da riga di comando.
-    """
-    return argc <= 1
 
 
 def load_config(config_path: str = None) -> dict:
@@ -304,12 +292,15 @@ def main():
                   "che il modello sia tra quelli elencati e che l'account abbia credito.")
         return 0
 
-    if args.launcher:
-        # Prima la finestra grafica; se Tk non c'e' si ricade sul menu testuale.
+    # Doppio clic (nessun argomento) o --launcher: finestra del launcher.
+    # Se Tk non c'e' si ricade sul menu testuale.
+    if args.launcher or started_without_arguments(sys.argv):
         try:
             from meta_driver.gui_launcher import launch_launcher_gui
 
-            return launch_launcher_gui(cfg, args, execute_full_diagnostic_pipeline)
+            hide = should_hide_console(sys.argv, getattr(sys, "frozen", False))
+            return launch_launcher_gui(cfg, args, execute_full_diagnostic_pipeline,
+                                       hide_console=hide)
         except Exception as exc:  # noqa: BLE001 - qualunque problema di Tk
             print("[LAUNCHER] interfaccia grafica non disponibile (%s): menu testuale." % exc)
             from meta_driver.launcher_menu import run_launcher
@@ -324,7 +315,7 @@ def main():
     if args.geometry_only:
         return _run_geometry_only(cfg, args)
 
-    if args.gui or _launch_gui_by_default(len(sys.argv)):
+    if args.gui:
         from gui_app import launch_gui
 
         launch_gui(cfg, execute_full_diagnostic_pipeline)

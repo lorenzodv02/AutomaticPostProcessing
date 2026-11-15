@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.21.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.22.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.21.0
+python main.py --version      # FS-MetaPostDiag 1.22.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,13 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.22.0 — Il launcher parte da solo (niente `--launcher`)
+
+- **Doppio clic sull'exe** (nessun argomento) → si apre il launcher grafico, senza flag.
+- `--gui` resta per l'interfaccia classica a caso singolo; `--suite`, `--geometry-only`, `-w`, `--ai-check` restano per l'automazione.
+- La console creata dal doppio clic viene nascosta quando parte il launcher; lanciando l'exe da un terminale la console resta (è dell'utente).
+- Regola in `meta_driver/entry_modes.py`, testata.
 
 ### v1.21.0 — Launcher: icona, monogramma e wordmark di squadra
 

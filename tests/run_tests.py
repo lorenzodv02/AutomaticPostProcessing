@@ -23,6 +23,7 @@ MODULES = (
     "tests.test_suite",
     "tests.test_suite_mode",
     "tests.test_launcher",
+    "tests.test_entry_modes",
     "tests.test_gui_launcher",
     "tests.test_config_bridge",
     "tests.test_parser_synthetic",

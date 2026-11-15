@@ -686,7 +686,21 @@ class LauncherApp:
         self._start_job("Geometria", job)
 
 
-def launch_launcher_gui(cfg, args, pipeline) -> int:
+def _hide_console_window():
+    """Nasconde la console creata dal doppio clic (solo eseguibile Windows)."""
+    try:
+        import ctypes
+
+        handle = ctypes.windll.kernel32.GetConsoleWindow()
+        if handle:
+            ctypes.windll.user32.ShowWindow(handle, 0)
+    except Exception:
+        pass
+
+
+def launch_launcher_gui(cfg, args, pipeline, hide_console: bool = False) -> int:
     app = LauncherApp(cfg, args, pipeline)
+    if hide_console:
+        _hide_console_window()
     app.root.mainloop()
     return 0
