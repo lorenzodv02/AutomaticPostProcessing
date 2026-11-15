@@ -237,3 +237,34 @@ def test_pick_inputs_marks_ambiguous_and_takes_newest():
         assert "-1-" in choice["motivo"] and "-2-" in choice["motivo"]
     finally:
         shutil.rmtree(base, ignore_errors=True)
+
+def test_iterations_from_name():
+    """Il numero finale di Fluent e' l'iterazione a cui e' stato salvato il caso."""
+    sys.path.insert(0, os.path.join(REPO, "batch"))
+    from make_tables import iterations_from_name
+
+    assert iterations_from_name("V14_3-1-01250.cas") == 1250
+    assert iterations_from_name("V16_70-50_-1-00500.dat") == 500
+    assert iterations_from_name("d8-1-00250.cas") == 250
+    assert iterations_from_name("senza-numeri.cas") is None
+    assert iterations_from_name("") is None
+
+
+def test_plausibility_flags_broken_case():
+    """Un caso con campo di pressione sbagliato deve essere segnalato."""
+    sys.path.insert(0, os.path.join(REPO, "batch"))
+    from check_dataset import plausibility_issues
+
+    broken = {
+        "downforce_total_N": 5397.4, "drag_total_N": -12741.1,
+        "efficiency_l_d": 4.4e7, "peak_suction_cp": -8.0, "stalled_surface_pct": 39.7,
+    }
+    issues = plausibility_issues(broken)
+    assert len(issues) >= 3, issues
+
+    good = {
+        "downforce_total_N": 483.1, "drag_total_N": 222.7,
+        "efficiency_l_d": 2.17, "peak_suction_cp": -1.6, "stalled_surface_pct": 19.7,
+    }
+    assert plausibility_issues(good) == []
+    assert plausibility_issues({}) == []

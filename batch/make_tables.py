@@ -18,6 +18,24 @@ import csv
 import glob
 import json
 import os
+import re
+
+# Fluent salva i file come <nome>-<passo>-<iterazioni>.cas (es. V14_3-1-01250.cas):
+# l'ultimo numero e' l'iterazione a cui e' stato scritto il caso.
+ITERATION_RE = re.compile(r"-(\d+)-(\d+)$")
+
+
+def iterations_from_name(filename):
+    """Numero di iterazioni letto dal nome del file, o None se non c'e'."""
+    stem = os.path.splitext(str(filename or ""))[0]
+    match = ITERATION_RE.search(stem)
+    if not match:
+        return None
+    try:
+        return int(match.group(2))
+    except ValueError:
+        return None
+
 
 # colonne dei KPI globali: (nome nel JSON, intestazione CSV)
 KPI_COLUMNS = [
@@ -90,6 +108,7 @@ def load_cases(data_dir: str) -> list:
             "assembly": payload.get("assembly_type", ""),
             "cas": os.path.basename(payload.get("cas_file") or ""),
             "dat": os.path.basename(payload.get("dat_file") or ""),
+            "iterazioni": iterations_from_name(payload.get("cas_file") or ""),
             "config": payload.get("config") or {},
         })
     return cases
@@ -143,7 +162,7 @@ def main() -> int:
             meta_by_case[key] = row
 
     # ---------------- dataset.csv (un caso per riga) ----------------
-    header = ["case_id", "assieme", "cas_file", "dat_file"] + [csv_name for _key, csv_name in KPI_COLUMNS]
+    header = ["case_id", "assieme", "cas_file", "dat_file", "iterazioni"] + [csv_name for _key, csv_name in KPI_COLUMNS]
     extra_meta = [name for name in meta_header if name != "case_id" and name not in header]
     header += extra_meta
 
@@ -151,7 +170,8 @@ def main() -> int:
     for case in cases:
         kpis = case["kpis"]
         row = {"case_id": case["case_id"], "assieme": case["assembly"],
-               "cas_file": case.get("cas", ""), "dat_file": case.get("dat", "")}
+               "cas_file": case.get("cas", ""), "dat_file": case.get("dat", ""),
+               "iterazioni": "" if case.get("iterazioni") is None else case["iterazioni"]}
         for key, csv_name in KPI_COLUMNS:
             value = kpis.get(key)
             row[csv_name] = "" if value is None else value
@@ -184,7 +204,12 @@ def main() -> int:
     else:
         print("metadata.csv    : assente (colonne parametri non unite)")
 
-    ranked = [row for row in rows if isinstance(row.get("deportanza_N"), (int, float))]
+    # anteprima: ignora i casi con numeri fisicamente impossibili (li segnala check_dataset)
+    ranked = [row for row in rows
+              if isinstance(row.get("deportanza_N"), (int, float))
+              and abs(row["deportanza_N"]) <= 2000.0
+              and isinstance(row.get("drag_N"), (int, float))
+              and 0.0 < row["drag_N"] <= 1000.0]
     ranked.sort(key=lambda r: r["deportanza_N"], reverse=True)
     if ranked:
         print("\nPrime 5 per deportanza:")

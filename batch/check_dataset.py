@@ -15,9 +15,46 @@ import argparse
 import glob
 import json
 import os
+import sys
 from collections import Counter
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from make_tables import iterations_from_name  # noqa: E402
+
 TOLERANCE_PCT = 0.5
+
+# Limiti di plausibilita' fisica per un caso Formula Student a ~14 m/s.
+# Servono a fermare i casi con campo di pressione sbagliato (velocita' diversa,
+# run divergente, file non aggiornato) che altrimenti passerebbero tutti i CHK.
+MAX_ABS_DOWNFORCE_N = 2000.0
+MAX_DRAG_N = 1000.0
+MAX_L_OVER_D = 20.0
+CP_CLIP_FLOOR = -8.0
+
+
+def plausibility_issues(kpis: dict) -> list:
+    """Problemi fisici evidenti nei KPI di un caso (lista di messaggi)."""
+    issues = []
+    downforce = kpis.get("downforce_total_N", kpis.get("downforce_N"))
+    drag = kpis.get("drag_total_N", kpis.get("drag_N"))
+    l_d = kpis.get("efficiency_l_d", kpis.get("efficiency_L_over_D"))
+    cp_min = kpis.get("peak_suction_cp")
+    stalled = kpis.get("stalled_surface_pct", kpis.get("stalled_area_percentage"))
+    if isinstance(downforce, (int, float)) and abs(downforce) > MAX_ABS_DOWNFORCE_N:
+        issues.append("deportanza fuori scala: %.0f N (possibile velocita' o condizioni diverse)"
+                      % downforce)
+    if isinstance(drag, (int, float)) and drag <= 0:
+        issues.append("drag non positivo: %.1f N (campo di pressione non valido)" % drag)
+    elif isinstance(drag, (int, float)) and drag > MAX_DRAG_N:
+        issues.append("drag fuori scala: %.0f N" % drag)
+    if isinstance(l_d, (int, float)) and abs(l_d) > MAX_L_OVER_D:
+        issues.append("efficienza fuori scala: %.1f" % l_d)
+    if isinstance(cp_min, (int, float)) and cp_min <= CP_CLIP_FLOOR - 1e-6:
+        issues.append("Cp_min al limite di clipping (%.2f): campo fuori intervallo" % cp_min)
+    if isinstance(stalled, (int, float)) and not (0.0 <= stalled <= 100.0):
+        issues.append("percentuale di superficie stallata fuori range: %.1f%%" % stalled)
+    return issues
 
 
 def load(data_dir: str) -> list:
@@ -40,6 +77,8 @@ def load(data_dir: str) -> list:
             "assembly": payload.get("assembly_type", ""),
             "config": payload.get("config") or {},
             "n_zones": len((payload.get("cas_info") or {}).get("zones") or []),
+            "cas_file": os.path.basename(payload.get("cas_file") or ""),
+            "iterazioni": iterations_from_name(payload.get("cas_file") or ""),
         })
     return cases
 
@@ -176,21 +215,53 @@ def main() -> int:
     if zero:
         warnings.append("deportanza nulla in %d casi: %s" % (len(zero), ", ".join(zero[:5])))
 
+    # ---- plausibilita' fisica ----
+    suspicious = []
+    for case in usable:
+        for issue in plausibility_issues(case["kpis"]):
+            suspicious.append((case["case_id"], issue))
+    if suspicious:
+        problems.append("%d casi con numeri fisicamente sospetti (guarda il log e le "
+                        "condizioni della simulazione)" % len({cid for cid, _ in suspicious}))
+
+    # ---- iterazioni di convergenza (dal nome file) ----
+    iterations = [(c["case_id"], c["iterazioni"]) for c in usable if c.get("iterazioni")]
+    if iterations:
+        values = [value for _cid, value in iterations]
+        out("")
+        out("Iterazioni di convergenza (dal nome del file): min %d | max %d"
+            % (min(values), max(values)))
+        low = [(cid, value) for cid, value in iterations if value < 1000]
+        if low:
+            warnings.append("%d casi sotto 1000 iterazioni (possono non essere convergiti): %s"
+                            % (len(low), ", ".join("%s (%d)" % (cid, value) for cid, value in low[:8])))
+        spread = max(values) - min(values)
+        if spread > 0:
+            warnings.append("iterazioni diverse tra i casi (range %d): confrontare solo a "
+                            "convergenza raggiunta" % spread)
+
     # ---- tabella riassuntiva ----
     out("")
-    out("%-40s %10s %10s %8s %10s" % ("case_id", "deportanza", "drag", "|L|/D", "v_inf"))
+    out("%-40s %10s %10s %8s %6s %10s" % ("case_id", "deportanza", "drag", "|L|/D", "iter", "v_inf"))
     for case in usable:
         kpis = case["kpis"]
         df = kpis.get("downforce_total_N", kpis.get("downforce_N"))
         dr = kpis.get("drag_total_N", kpis.get("drag_N"))
         l_d = kpis.get("efficiency_l_d", kpis.get("efficiency_L_over_D"))
         v = kpis.get("velocity_inf_ms")
-        out("%-40s %10s %10s %8s %10s" % (
+        out("%-40s %10s %10s %8s %6s %10s" % (
             case["case_id"][:40],
             ("%.1f" % df) if isinstance(df, (int, float)) else "n/d",
             ("%.1f" % dr) if isinstance(dr, (int, float)) else "n/d",
             ("%.2f" % l_d) if isinstance(l_d, (int, float)) else "n/d",
+            str(case.get("iterazioni") or "-"),
             ("%.1f" % v) if isinstance(v, (int, float)) else "n/d"))
+
+    if suspicious:
+        out("")
+        out("CASI SOSPETTI:")
+        for case_id, issue in suspicious:
+            out("  [X] %-24s %s" % (case_id, issue))
 
     out("")
     if problems:

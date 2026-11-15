@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.11.2-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.11.3-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.11.2
+python main.py --version      # FS-MetaPostDiag 1.11.3
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,15 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.11.3 — casi sospetti e iterazioni di convergenza
+
+Dopo la prima estrazione reale (21 casi) sono emersi due problemi che i controlli non vedevano:
+
+- **un caso con numeri impossibili** (deportanza 5397 N, drag −12741 N, Cp_min al limite di clipping): tutti i CHK passavano perché la somma dei PID tornava. Ora `check_dataset.py` verifica la **plausibilità fisica** (deportanza, drag positivo, L/D, Cp_min, percentuale di stallo) e lo segnala come caso sospetto;
+- **iterazioni di convergenza diverse** (250…1750): il numero finale nei nomi Fluent è l'iterazione a cui è stato salvato il caso. `make_tables.py` lo estrae in una colonna `iterazioni`, `check_dataset.py` segnala i casi sotto 1000 iterazioni e il range tra i casi.
+
+Verificato sul dataset reale: 1 caso sospetto individuato, 4 casi sotto 1000 iterazioni segnalati, anteprima della classifica che non mostra più il caso impossibile.
 
 ### v1.11.2 — tutorial d'uso e filtro dei casi
 
