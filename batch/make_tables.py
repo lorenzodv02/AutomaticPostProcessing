@@ -88,6 +88,8 @@ def load_cases(data_dir: str) -> list:
             "kpis": kpis,
             "pids": pids,
             "assembly": payload.get("assembly_type", ""),
+            "cas": os.path.basename(payload.get("cas_file") or ""),
+            "dat": os.path.basename(payload.get("dat_file") or ""),
             "config": payload.get("config") or {},
         })
     return cases
@@ -141,14 +143,15 @@ def main() -> int:
             meta_by_case[key] = row
 
     # ---------------- dataset.csv (un caso per riga) ----------------
-    header = ["case_id", "assieme"] + [csv_name for _key, csv_name in KPI_COLUMNS]
+    header = ["case_id", "assieme", "cas_file", "dat_file"] + [csv_name for _key, csv_name in KPI_COLUMNS]
     extra_meta = [name for name in meta_header if name != "case_id" and name not in header]
     header += extra_meta
 
     rows = []
     for case in cases:
         kpis = case["kpis"]
-        row = {"case_id": case["case_id"], "assieme": case["assembly"]}
+        row = {"case_id": case["case_id"], "assieme": case["assembly"],
+               "cas_file": case.get("cas", ""), "dat_file": case.get("dat", "")}
         for key, csv_name in KPI_COLUMNS:
             value = kpis.get(key)
             row[csv_name] = "" if value is None else value

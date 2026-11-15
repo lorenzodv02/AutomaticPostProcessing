@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.11.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.11.1-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.11.0
+python main.py --version      # FS-MetaPostDiag 1.11.1
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,24 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.11.1 — estrazione in blocco: si tengono solo le iterazioni
+
+Le cartelle contengono spesso sia i file di partenza sia quelli dell'ultima iterazione. Ora `batch_extract.py` riconosce **solo i file iterati**:
+
+| Nome | Esito |
+|---|---|
+| `V14_3-1-01250.cas` / `.dat` | usato (nome-iterazione-id) |
+| `V14_3.cas` / `.dat` | **scartato** (file di partenza) |
+| `nome_1_iterazioni.cas` | usato (contiene "iterazion") |
+
+- le cartelle con i soli file di partenza vengono scartate e listate in `run_summary.txt`;
+- se in una cartella ci sono entrambi, la coppia iterata viene **isolata** in `_solo_iterazioni` con hardlink (nessuna copia dei GB): il programma non può più prendere il file sbagliato;
+- con più iterazioni (`-1-`, `-2-`) usa la più recente e segnala il caso come `AMBIGUO`;
+- `--iter-keyword` per una regola diversa, `--include-all` per forzare tutto;
+- `index.csv` e `dataset.csv` riportano `cas_usato`/`dat_usato`.
+
+Verificato sul caso reale: cartella con `V14_3.*` (finto) + `V14_3-1-01250.*` (veri) → usata solo la coppia iterata, 122 s, 483,1 N / 222,7 N, 43 PID, `_solo_iterazioni` rimossa a fine corsa.
 
 ### v1.11.0 — estrazione in blocco di molte analisi
 

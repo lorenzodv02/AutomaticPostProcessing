@@ -2,6 +2,7 @@
 """Gli script di estrazione in blocco devono funzionare senza dipendenze."""
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -104,3 +105,135 @@ def test_batch_scripts_have_no_third_party_imports():
         text = open(os.path.join(REPO, "batch", name), encoding="utf-8").read()
         for forbidden in ("import numpy", "import pandas", "import openpyxl", "import matplotlib"):
             assert forbidden not in text, (name, forbidden)
+
+
+def _case_files(base, name, files):
+    case = os.path.join(base, name)
+    os.makedirs(case)
+    for item in files:
+        open(os.path.join(case, item), "wb").close()
+    return case
+
+
+def test_pick_inputs_prefers_iteration_files():
+    """Con file di partenza e file iterati nella stessa cartella, sceglie gli iterati."""
+    base = tempfile.mkdtemp(prefix="batch_pick_")
+    try:
+        case = _case_files(base, "analisi 1", [
+            "base.cas", "base.dat", "nome_1_iterazioni.cas", "nome_1_iterazioni.dat",
+        ])
+        pattern = re.compile(batch_extract.DEFAULT_ITER_PATTERN, re.IGNORECASE)
+        choice = batch_extract.pick_inputs(case, pattern)
+        assert choice["stato"] == "OK"
+        assert choice["cas"] == "nome_1_iterazioni.cas"
+        assert choice["dat"] == "nome_1_iterazioni.dat"
+        # ci sono altri file: la coppia va isolata per non sbagliare file
+        assert choice["modo"] == "isolato"
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_pick_inputs_scarta_i_file_di_partenza():
+    base = tempfile.mkdtemp(prefix="batch_pick_")
+    try:
+        case = _case_files(base, "base_only", ["avvio.cas", "avvio.dat"])
+        pattern = re.compile(batch_extract.DEFAULT_ITER_PATTERN, re.IGNORECASE)
+        choice = batch_extract.pick_inputs(case, pattern)
+        assert choice["stato"] == "SCARTATO"
+        assert not choice["cas"] and not choice["dat"]
+        assert "iterazion" in choice["motivo"].lower()
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_pick_inputs_in_place_when_only_iteration_pair():
+    base = tempfile.mkdtemp(prefix="batch_pick_")
+    try:
+        case = _case_files(base, "solo_iterati", ["nome_1_iterazioni.cas", "nome_1_iterazioni.dat"])
+        pattern = re.compile(batch_extract.DEFAULT_ITER_PATTERN, re.IGNORECASE)
+        choice = batch_extract.pick_inputs(case, pattern)
+        assert choice["stato"] == "OK"
+        assert choice["modo"] == "in_place"
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_isolated_run_dir_uses_links_and_is_removed():
+    """L'isolamento non deve copiare i GB: hardlink, e la cartella sparisce dopo."""
+    base = tempfile.mkdtemp(prefix="batch_iso_")
+    try:
+        case = _case_files(base, "analisi 1", [
+            "base.cas", "base.dat", "nome_1_iterazioni.cas", "nome_1_iterazioni.dat",
+        ])
+        pattern = re.compile(batch_extract.DEFAULT_ITER_PATTERN, re.IGNORECASE)
+        choice = batch_extract.pick_inputs(case, pattern)
+        run_dir = batch_extract.prepare_run_dir(case, choice)
+        assert os.path.basename(run_dir) == batch_extract.ISOLATED_DIR
+        assert sorted(os.listdir(run_dir)) == ["nome_1_iterazioni.cas", "nome_1_iterazioni.dat"]
+        # il contenuto e' lo stesso file, non una copia (stesso inode su NTFS)
+        source = os.path.join(case, "nome_1_iterazioni.cas")
+        if hasattr(os.stat(source), "st_ino") and os.stat(source).st_ino:
+            assert os.stat(source).st_ino == os.stat(os.path.join(run_dir, "nome_1_iterazioni.cas")).st_ino
+        batch_extract.remove_run_dir(case, choice, keep_reports=False)
+        assert not os.path.exists(run_dir)
+        # gli originali restano
+        assert os.path.isfile(source)
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_find_case_dirs_ignores_underscore_folders():
+    base = tempfile.mkdtemp(prefix="batch_skip_")
+    try:
+        _case_files(base, "buono", ["a.cas", "a.dat"])
+        _case_files(base, "_solo_iterazioni", ["a.cas", "a.dat"])
+        _case_files(base, "_dati_batch", ["a.cas", "a.dat"])
+        found = batch_extract.find_case_dirs(base, os.path.join(base, "_dati_batch"))
+        assert len(found) == 1, found
+        assert found[0].endswith("buono")
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+def test_pick_inputs_handles_real_naming_convention():
+    """Nomi reali: V14_3 e' il file di partenza, V14_3-1-01250 e' l'iterato."""
+    base = tempfile.mkdtemp(prefix="batch_real_")
+    try:
+        pattern = re.compile(batch_extract.DEFAULT_ITER_PATTERN, re.IGNORECASE)
+
+        case = _case_files(base, "con_entrambi", [
+            "V14_3.cas", "V14_3.dat", "V14_3-1-01250.cas", "V14_3-1-01250.dat",
+        ])
+        choice = batch_extract.pick_inputs(case, pattern)
+        assert choice["stato"] == "OK"
+        assert choice["cas"] == "V14_3-1-01250.cas"
+        assert choice["dat"] == "V14_3-1-01250.dat"
+        assert choice["modo"] == "isolato"
+
+        solo = _case_files(base, "solo_iterato", ["V14_3-1-01250.cas", "V14_3-1-01250.dat"])
+        assert batch_extract.pick_inputs(solo, pattern)["modo"] == "in_place"
+
+        partenza = _case_files(base, "solo_partenza", ["V14_3.cas", "V14_3.dat"])
+        assert batch_extract.pick_inputs(partenza, pattern)["stato"] == "SCARTATO"
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_pick_inputs_marks_ambiguous_and_takes_newest():
+    """Con due iterazioni sceglie la piu' recente e lo dichiara."""
+    base = tempfile.mkdtemp(prefix="batch_amb_")
+    try:
+        case = _case_files(base, "due_iterazioni", [
+            "V14_3-1-01250.cas", "V14_3-1-01250.dat",
+            "V14_3-2-01250.cas", "V14_3-2-01250.dat",
+        ])
+        old = os.path.join(case, "V14_3-1-01250.cas")
+        new = os.path.join(case, "V14_3-2-01250.cas")
+        os.utime(old, (1_600_000_000, 1_600_000_000))
+        os.utime(new, (1_700_000_000, 1_700_000_000))
+        pattern = re.compile(batch_extract.DEFAULT_ITER_PATTERN, re.IGNORECASE)
+        choice = batch_extract.pick_inputs(case, pattern)
+        assert choice["stato"] == "AMBIGUO"
+        assert choice["cas"] == "V14_3-2-01250.cas"
+        assert "-1-" in choice["motivo"] and "-2-" in choice["motivo"]
+    finally:
+        shutil.rmtree(base, ignore_errors=True)

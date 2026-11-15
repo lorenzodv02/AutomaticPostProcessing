@@ -16,6 +16,31 @@ post-processing su ciascuna e salva solo i dati utili:
 Gli HTML da ~80 MB e le immagini vengono cancellati dopo ogni caso
 (con --keep-output e --keep-reports si conservano).
 
+Quali file usa
+--------------
+Le cartelle possono contenere sia i file di partenza (senza iterazioni) sia
+quelli dell'ultima iterazione. Il programma usa SOLO i file riconosciuti come
+iterati:
+
+    V14_3-1-01250.cas / .dat     usato      (nome-iterazione-id)
+    V14_3.cas / .dat             SCARTATO   (file di partenza)
+    nome_1_iterazioni.cas/.dat   usato      (contiene "iterazion")
+    nome_1_iteration.cas/.dat    usato
+
+Le cartelle con i soli file di partenza vengono SCARTATE e compaiono in
+`run_summary.txt`.
+
+Se nella stessa cartella ci sono entrambi, la coppia con le iterazioni viene
+isolata in una sottocartella temporanea `_solo_iterazioni` (hardlink, nessuna
+copia dei GB) cosi' il programma non puo' sbagliare file.
+
+Se ci sono piu' iterazioni (`-1-`, `-2-`, ...) viene usata la piu' recente e il
+caso viene segnalato come AMBIGUO nel log, cosi' sai cosa e' stato scelto.
+
+Keyword diversa? `--iter-keyword "iterazion|finale"` (vale sul nome senza
+estensione).
+Vuoi forzare tutto? `--include-all`.
+
 Cosa serve
 ----------
 1. Questa cartella, con dentro:
