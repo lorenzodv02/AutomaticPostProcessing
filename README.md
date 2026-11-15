@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.20.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.21.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.20.1
+python main.py --version      # FS-MetaPostDiag 1.21.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,15 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.21.0 — Launcher: icona, monogramma e wordmark di squadra
+
+Il launcher ora usa **tutti** gli asset di brand che erano già nel progetto:
+
+- icona della finestra (barra del titolo) da `assets/FS-MetaPostDiag.ico` + `.png`, come la GUI principale;
+- **wordmark UniNa Corse** nell'header (a destra, sopra le barre oblique);
+- monogramma UC a sinistra e barre oblique del brand;
+- immagini ridimensionate con PIL (`Image.LANCZOS`), con fallback a Tk puro se PIL non c'è.
 
 ### v1.20.1 — Launcher grafico: import pigro (CI verde)
 

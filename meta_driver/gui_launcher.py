@@ -145,6 +145,7 @@ class LauncherApp:
         self.root.geometry("1060x820")
         self.root.minsize(940, 720)
         self.root.configure(bg=brand.NAVY_DEEP)
+        self._set_window_icon()
         self._GradientButton, self._BrandBars = _ui_components()
         self._build()
         self._show_mode("single")
@@ -164,7 +165,12 @@ class LauncherApp:
         tk.Label(titles, text="Launcher  ·  UniNa Corse  ·  Aerodynamics & Cooling",
                  bg=brand.NAVY_DEEP, fg=brand.TEXT_MUTED,
                  font=(FONT_UI, 10)).pack(anchor="w")
-        self._BrandBars(head, width=150, height=46).pack(side="right")
+        right = tk.Frame(head, bg=brand.NAVY_DEEP)
+        right.pack(side="right")
+        self._mark_word = self._load_png("wordmark-white.png", height=26)
+        if self._mark_word is not None:
+            tk.Label(right, image=self._mark_word, bg=brand.NAVY_DEEP).pack(anchor="e")
+        self._BrandBars(right, width=150, height=38).pack(anchor="e", pady=(2, 0))
         tk.Frame(self.root, bg=brand.GOLD, height=3).pack(fill="x", padx=26, pady=(8, 12))
 
         modes = tk.Frame(self.root, bg=brand.NAVY_DEEP)
@@ -220,17 +226,54 @@ class LauncherApp:
         self.log.pack(side="left", fill="both", expand=True)
         scrollbar.configure(command=self.log.yview)
 
-    def _load_mark(self):
-        path = brand.asset_path("uc-monogram-white.png")
+    def _load_png(self, name, height=None):
+        """Carica una PNG di assets/ ridimensionata in altezza (PIL, fallback Tk)."""
+        path = brand.asset_path(name)
         if not path:
             return None
         try:
-            image = tk.PhotoImage(file=path)
-        except tk.TclError:
-            return None
-        # il PNG e' 512 px: si riduce a ~54 px mantenendo la proporzione
-        factor = max(1, round(image.width() / 54.0))
-        return image.subsample(factor, factor)
+            from PIL import Image, ImageTk
+
+            with Image.open(path) as image:
+                if height:
+                    ratio = height / float(image.height)
+                    size = (max(1, int(image.width * ratio)), height)
+                    resized = image.convert("RGBA").resize(size, Image.LANCZOS)
+                else:
+                    resized = image.convert("RGBA")
+                return ImageTk.PhotoImage(resized)
+        except Exception:  # niente PIL: si usa Tk puro
+            try:
+                image = tk.PhotoImage(file=path)
+            except tk.TclError:
+                return None
+            if height:
+                factor = max(1, round(image.height() / float(height)))
+                return image.subsample(factor, factor)
+            return image
+
+    def _load_mark(self):
+        return self._load_png("uc-monogram-white.png", height=54)
+
+    def _set_window_icon(self):
+        """Icona della finestra: .ico + PNG dell'app (come la GUI principale)."""
+        icon_path = brand.asset_path("FS-MetaPostDiag.ico")
+        if icon_path:
+            try:
+                self.root.iconbitmap(default=icon_path)
+            except tk.TclError:
+                pass
+        png = brand.asset_path("FS-MetaPostDiag.png")
+        if png:
+            try:
+                from PIL import Image, ImageTk
+
+                with Image.open(png) as image:
+                    icon = ImageTk.PhotoImage(image.convert("RGBA"))
+                self.root.iconphoto(True, icon)
+                self._window_icon = icon
+            except Exception:
+                pass
 
     def _style_ttk(self):
         style = ttk.Style(self.root)
