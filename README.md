@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.12.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.13.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.12.0
+python main.py --version      # FS-MetaPostDiag 1.13.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,17 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.13.0 — Aero Recombination Engine
+
+Il passo che mancava: non descrivere le configurazioni, ma **ricomporre la vettura** dai dati. `tools/recombination.py` (solo libreria standard) per ogni zona del fondo, delle ali e del corpo cerca la configurazione che la produce meglio e costruisce una "vettura sintetica".
+
+- **affidabilità per zona** misurata sulle run doppie (stesso modello, stesso file): una zona entra solo se il guadagno supera 3σ del suo rumore (0,45 N sui dati reali);
+- **famiglie**: fondo, ala anteriore, ala posteriore, corpo, gomme; le **gomme** sono escluse per default (artefatti della parete rotante, non leve di progetto);
+- **tre pacchetti incrementali** da simulare (solo fondo / fondo+ali / tutto l'affidabile) con guadagno, drag, donatori e numero di interfacce da raccordare;
+- **piano di prova** per ogni pacchetto: parti da un caso e cambia solo le zone elencate.
+
+Sul dataset reale (gruppo RW1 + diffusore completo, riferimento V9 508,5 N / 219,7 N): sintesi **560,4 N / 229,8 N** = **+51,9 N** con **+10,2 N** di drag (L/D 2,44 contro 2,31). Il pacchetto "solo fondo" vale **+15,4 N / +3,0 N**: quello è il primo da simulare.
 
 ### v1.12.0 — Aero Design Explorer
 

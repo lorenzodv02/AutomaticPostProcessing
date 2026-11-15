@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aero Recombination Engine — UniNa Corse</title>
+<style>
+  :root {
+    --bg: #07131f; --surface: #0d2133; --surface-2: #10283d;
+    --border: rgba(255,255,255,0.09); --text: #e8f1f7; --muted: #8fa8b8;
+    --accent: #fdeb19; --accent-2: #ff7a76; --good: #4ade80; --info: #38bdf8;
+    --mono: "Cascadia Mono", "Consolas", "Roboto Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: radial-gradient(1200px 600px at 15% -10%, #10283d 0%, var(--bg) 55%);
+         color: var(--text); font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+         line-height: 1.5; padding: 28px 32px 60px; }
+  header, main, footer { max-width: 1220px; margin: 0 auto; }
+  footer { margin-top: 26px; color: var(--muted); font-size: 11.5px; }
+  .kicker { color: var(--accent); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; font-weight: 700; }
+  h1 { margin: 6px 0 4px; font-size: 34px; font-weight: 800; letter-spacing: -0.5px; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 14px; max-width: 860px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip { background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+          padding: 5px 12px; font-size: 12px; color: var(--muted); }
+  .chip b { color: var(--text); font-family: var(--mono); }
+  .card { background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)), var(--surface);
+          border: 1px solid var(--border); border-radius: 16px; padding: 20px 22px; margin-bottom: 18px; }
+  .card h2 { margin: 0 0 4px; font-size: 18px; font-weight: 700; }
+  .card h2 .num { color: var(--accent); font-family: var(--mono); margin-right: 8px; }
+  .card p.hint { margin: 2px 0 16px; color: var(--muted); font-size: 12.5px; }
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .stat { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; }
+  .stat .label { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+  .stat .value { font-family: var(--mono); font-size: 23px; font-weight: 700; margin-top: 2px; }
+  .stat .unit { font-size: 12px; color: var(--muted); margin-left: 3px; }
+  .stat .note { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .accent { color: var(--accent); } .good { color: var(--good); } .warn { color: var(--accent-2); } .info { color: var(--info); }
+  .families { margin-top: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .fam-row { display: grid; grid-template-columns: 150px 1fr 170px; gap: 12px; align-items: center; font-size: 12.5px; }
+  .fam-name { color: var(--muted); }
+  .fam-track { position: relative; height: 16px; background: rgba(255,255,255,0.04); border-radius: 5px; }
+  .fam-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 5px;
+              background: linear-gradient(90deg, rgba(74,222,128,0.35), var(--good)); }
+  .fam-fill.neg { background: linear-gradient(90deg, var(--accent-2), rgba(255,122,118,0.35)); }
+  .fam-val { font-family: var(--mono); text-align: right; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { padding: 7px 8px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  th:first-child, td:first-child { text-align: left; }
+  th:nth-child(2), td:nth-child(2) { text-align: left; }
+  th { color: var(--muted); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+       cursor: pointer; user-select: none; white-space: nowrap; }
+  th:hover { color: var(--accent); }
+  td.mono, th.mono { font-family: var(--mono); }
+  .ok { color: var(--good); } .ko { color: var(--muted); text-decoration: line-through; }
+  .proposals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .proposal { background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px;
+              padding: 16px; cursor: pointer; transition: border-color .15s ease, transform .15s ease; }
+  .proposal:hover { transform: translateY(-2px); }
+  .proposal.sel { border-color: var(--accent); }
+  .proposal h3 { margin: 0 0 6px; font-size: 15px; }
+  .proposal .big { font-family: var(--mono); font-size: 26px; font-weight: 700; color: var(--good); }
+  .proposal .small { font-size: 11.5px; color: var(--muted); }
+  .proposal .tag { display: inline-block; margin-top: 8px; padding: 2px 8px; border-radius: 6px;
+                   border: 1px solid var(--border); font-size: 10.5px; font-family: var(--mono); color: var(--muted); }
+  .detail { margin-top: 14px; }
+  .verdict { border-left: 3px solid var(--accent); background: rgba(253,235,25,0.06);
+             padding: 10px 14px; border-radius: 0 10px 10px 0; font-size: 12.5px; margin-top: 12px; }
+  .verdict.bad { border-left-color: var(--accent-2); background: rgba(255,122,118,0.07); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .list { margin: 6px 0 0; padding: 0; list-style: none; }
+  .list li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0;
+             border-bottom: 1px dashed rgba(255,255,255,0.07); font-size: 12.5px; }
+  .list li span:last-child { font-family: var(--mono); }
+  @media (max-width: 1000px) { .kpis, .proposals { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 700px) { .kpis, .proposals, .two { grid-template-columns: 1fr; } .fam-row { grid-template-columns: 110px 1fr 110px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="kicker">UniNa Corse · Aerodynamics &amp; Cooling</div>
+  <h1>Aero Recombination <span>Engine</span></h1>
+  <p class="sub">Non una classifica: la vettura che i dati dicono di costruire. Ogni zona viene presa
+     dalla configurazione che la produce meglio, con l'affidabilità misurata sulle run doppie e il
+     conto delle interfacce da raccordare.</p>
+  <div class="chips" id="chips"></div>
+</header>
+
+<main>
+  <section class="card">
+    <h2><span class="num">01</span>Il potenziale</h2>
+    <p class="hint">Riferimento e vettura sintetica, a parità di configurazione (ala posteriore e diffusore).</p>
+    <div class="kpis" id="kpis"></div>
+    <div class="families" id="families"></div>
+    <div class="verdict" id="verdict"></div>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">02</span>I donatori</h2>
+    <p class="hint">Per ogni zona: da quale configurazione conviene prenderla, quanto vale e se la
+       differenza supera il rumore misurato sulle run doppie. Clicca le intestazioni per ordinare.</p>
+    <div class="controls" style="margin-bottom:10px;">
+      <label class="small"><input type="checkbox" id="show-all"> mostra anche le zone scartate</label>
+    </div>
+    <div id="table-wrap"></div>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">03</span>Le tre proposte</h2>
+    <p class="hint">Pacchetti incrementali: ogni proposta aggiunge componenti. Clicca una proposta per
+       vedere le zone e il piano di prova.</p>
+    <div class="proposals" id="proposals"></div>
+    <div class="detail" id="proposal-detail"></div>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">04</span>Metodo e limiti</h2>
+    <div class="two">
+      <div>
+        <h3 style="font-size:13px;margin:0 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;">Come è costruita</h3>
+        <ul class="list" id="method"></ul>
+      </div>
+      <div>
+        <h3 style="font-size:13px;margin:0 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;">Cosa non è</h3>
+        <div class="verdict bad" id="limits"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer id="footer"></footer>
+
+<script>window.__RECO_DATA__ = __PAYLOAD__;</script>
+
+<script id="core">
+window.RecoCore = (function () {
+  var DATA = window.__RECO_DATA__;
+
+  function synthesis() {
+    var totals = DATA.totals;
+    return {
+      dep: totals.synth_dep, drag: totals.synth_drag,
+      gain: totals.gain_dep, delta_drag: totals.delta_drag,
+      ld: totals.ld, zones: totals.zones
+    };
+  }
+
+  function familyTotals() {
+    var out = {};
+    DATA.usable.forEach(function (row) {
+      var fam = row.family;
+      out[fam] = out[fam] || { gain: 0, drag: 0, zones: 0 };
+      out[fam].gain += row.gain;
+      out[fam].drag += row.drag_delta;
+      out[fam].zones += 1;
+    });
+    Object.keys(out).forEach(function (fam) {
+      out[fam].gain = Math.round(out[fam].gain * 100) / 100;
+      out[fam].drag = Math.round(out[fam].drag * 100) / 100;
+    });
+    return out;
+  }
+
+  function proposalByName(name) {
+    for (var i = 0; i < DATA.proposals.length; i++) {
+      if (DATA.proposals[i].name === name) return DATA.proposals[i];
+    }
+    return null;
+  }
+
+  function reliableRows(includeAll) {
+    return DATA.rows.filter(function (row) {
+      return includeAll || (row.reliable && !row.excluded_family);
+    });
+  }
+
+  function checkSums() {
+    var usable = DATA.usable;
+    var gain = usable.reduce(function (s, r) { return s + r.gain; }, 0);
+    var drag = usable.reduce(function (s, r) { return s + r.drag_delta; }, 0);
+    return {
+      gain: Math.round(gain * 100) / 100,
+      drag: Math.round(drag * 100) / 100,
+      matches: Math.abs(Math.round(gain * 100) / 100 - DATA.totals.gain_dep) < 0.02
+    };
+  }
+
+  return { data: DATA, synthesis: synthesis, familyTotals: familyTotals,
+           proposalByName: proposalByName, reliableRows: reliableRows, checkSums: checkSums };
+})();
+</script>
+
+<script>
+(function () {
+  var CORE = window.RecoCore;
+  var DATA = CORE.data;
+  var fmt1 = function (v) { return (v === null || v === undefined) ? "n/d" : Number(v).toFixed(1); };
+  var fmt2 = function (v) { return (v === null || v === undefined) ? "n/d" : Number(v).toFixed(2); };
+
+  (function chips() {
+    var items = [
+      ["configurazione", DATA.group.wing + " + " + DATA.group.diff],
+      ["casi", DATA.group.cases],
+      ["riferimento", DATA.baseline],
+      ["rumore per zona", DATA.noise.default.toFixed(2) + " N"],
+      ["zone usate", DATA.counts.usable + " / " + DATA.counts.zones]
+    ];
+    document.getElementById("chips").innerHTML = items.map(function (item) {
+      return '<span class="chip">' + item[0] + ' <b>' + item[1] + '</b></span>';
+    }).join("");
+  })();
+
+  (function kpis() {
+    var t = DATA.totals;
+    var cards = [
+      { label: "Riferimento", value: fmt1(t.base_dep), unit: "N", note: DATA.baseline + " · " + fmt1(t.base_drag) + " N drag", cls: "" },
+      { label: "Vettura sintetica", value: fmt1(t.synth_dep), unit: "N", note: fmt1(t.synth_drag) + " N drag", cls: "accent" },
+      { label: "Guadagno", value: "+" + fmt1(t.gain_dep), unit: "N", note: "su " + t.zones + " zone affidabili", cls: "good" },
+      { label: "Variazione resistenza", value: (t.delta_drag >= 0 ? "+" : "") + fmt1(t.delta_drag), unit: "N", note: "somma dei donatori", cls: t.delta_drag <= 0 ? "good" : "warn" },
+      { label: "Efficienza stimata", value: fmt2(t.ld), unit: "", note: "L/D della sintesi", cls: "info" }
+    ];
+    document.getElementById("kpis").innerHTML = cards.map(function (c) {
+      return '<div class="stat"><div class="label">' + c.label + '</div>' +
+             '<div class="value ' + c.cls + '">' + c.value + '<span class="unit">' + c.unit + '</span></div>' +
+             '<div class="note">' + c.note + '</div></div>';
+    }).join("");
+  })();
+
+  (function families() {
+    var families = CORE.familyTotals();
+    var names = Object.keys(families).sort(function (a, b) { return families[b].gain - families[a].gain; });
+    var maxGain = Math.max.apply(null, names.map(function (n) { return Math.abs(families[n].gain); }).concat([0.1]));
+    document.getElementById("families").innerHTML = names.map(function (name) {
+      var fam = families[name];
+      var width = Math.abs(fam.gain) / maxGain * 100;
+      var cls = fam.gain >= 0 ? "" : "neg";
+      return '<div class="fam-row"><div class="fam-name">' + name + ' · ' + fam.zones + ' zone</div>' +
+             '<div class="fam-track"><div class="fam-fill ' + cls + '" style="width:' + width + '%"></div></div>' +
+             '<div class="fam-val ' + (fam.gain >= 0 ? "good" : "warn") + '">' +
+             (fam.gain >= 0 ? "+" : "") + fam.gain.toFixed(1) + ' N · drag ' +
+             (fam.drag >= 0 ? "+" : "") + fam.drag.toFixed(1) + ' N</div></div>';
+    }).join("");
+    var best = names[0];
+    document.getElementById("verdict").textContent =
+      "Il contributo più grande viene da " + best + " (" + families[best].gain.toFixed(1) +
+      " N). I guadagni sono la somma di differenze misurate zona per zona: è un limite superiore, " +
+      "non una previsione, perché le interazioni fra componenti non sono nei dati.";
+  })();
+
+  var sortKey = "gain", sortDir = -1;
+  function renderTable() {
+    var includeAll = document.getElementById("show-all").checked;
+    var rows = CORE.reliableRows(includeAll).slice().sort(function (a, b) {
+      var va = a[sortKey], vb = b[sortKey];
+      if (typeof va === "string") return String(va).localeCompare(String(vb)) * sortDir;
+      return ((va || 0) - (vb || 0)) * sortDir;
+    });
+    var head = [["zone", "zona"], ["family", "famiglia"], ["donor", "da"],
+                ["gain", "guadagno N"], ["drag_delta", "Δ drag N"],
+                ["zone_noise", "rumore N"], ["base_dep", "base N"]];
+    var html = ["<table><thead><tr>"];
+    head.forEach(function (item) {
+      html.push('<th data-key="' + item[0] + '">' + item[1] + '</th>');
+    });
+    html.push("</tr></thead><tbody>");
+    rows.forEach(function (row) {
+      var cls = row.reliable && !row.excluded_family ? "" : "ko";
+      html.push('<tr class="' + cls + '">' +
+        '<td>' + row.zone + '</td>' +
+        '<td>' + row.family + '</td>' +
+        '<td class="mono">' + row.donor + '</td>' +
+        '<td class="mono good">+' + row.gain.toFixed(1) + '</td>' +
+        '<td class="mono">' + (row.drag_delta >= 0 ? "+" : "") + row.drag_delta.toFixed(1) + '</td>' +
+        '<td class="mono">' + row.zone_noise.toFixed(2) + '</td>' +
+        '<td class="mono">' + row.base_dep.toFixed(1) + '</td></tr>');
+    });
+    html.push("</tbody></table>");
+    var wrap = document.getElementById("table-wrap");
+    wrap.innerHTML = html.join("");
+    Array.prototype.forEach.call(wrap.querySelectorAll("th"), function (th) {
+      th.addEventListener("click", function () {
+        var key = th.getAttribute("data-key");
+        if (key === sortKey) sortDir = -sortDir; else { sortKey = key; sortDir = -1; }
+        renderTable();
+      });
+    });
+  }
+  document.getElementById("show-all").addEventListener("change", renderTable);
+
+  var selectedProposal = DATA.proposals.length ? DATA.proposals[0].name : null;
+  function renderProposals() {
+    document.getElementById("proposals").innerHTML = DATA.proposals.map(function (p) {
+      return '<div class="proposal' + (p.name === selectedProposal ? " sel" : "") + '" data-name="' + p.name + '">' +
+        '<h3>' + p.name + '</h3>' +
+        '<div class="big">+' + p.gain.toFixed(1) + ' <span class="small">N</span></div>' +
+        '<div class="small">drag ' + (p.delta_drag >= 0 ? "+" : "") + p.delta_drag.toFixed(1) +
+        ' N · ' + p.zones + ' zone</div>' +
+        '<span class="tag">donatori: ' + p.donors.length + '</span>' +
+        '<span class="tag">interfacce: ' + p.interfaces + '</span>' +
+        '</div>';
+    }).join("");
+    Array.prototype.forEach.call(document.querySelectorAll(".proposal"), function (node) {
+      node.addEventListener("click", function () {
+        selectedProposal = node.getAttribute("data-name");
+        renderProposals();
+        renderDetail();
+      });
+    });
+  }
+
+  function renderDetail() {
+    var proposal = CORE.proposalByName(selectedProposal);
+    var box = document.getElementById("proposal-detail");
+    if (!proposal) { box.innerHTML = ""; return; }
+    var rows = proposal.items.map(function (item) {
+      return '<tr><td>' + item.zone + '</td><td>' + item.family + '</td>' +
+             '<td class="mono">' + item.donor + '</td><td class="mono good">+' + item.gain.toFixed(1) + '</td></tr>';
+    }).join("");
+    var plan = [];
+    proposal.donors.forEach(function (donor) {
+      var zones = proposal.items.filter(function (item) { return item.donor === donor; })
+        .map(function (item) { return item.zone; });
+      plan.push(donor + ': ' + zones.join(", "));
+    });
+    box.innerHTML = '<h3 style="font-size:13px;margin:0 0 6px;color:var(--muted);' +
+      'text-transform:uppercase;letter-spacing:.08em;">Zone della proposta ' + proposal.name + '</h3>' +
+      '<table><thead><tr><th>zona</th><th>famiglia</th><th>da</th><th>guadagno N</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table>' +
+      '<div class="verdict">Piano di prova: costruire un caso che parta da ' + DATA.baseline +
+      ' e cambi solo i pezzi elencati qui. Da simulare in ordine: ' +
+      plan.slice(0, 3).join(" — ") + '. Confronto atteso: +' + proposal.gain.toFixed(1) +
+      ' N, drag ' + (proposal.delta_drag >= 0 ? "+" : "") + proposal.delta_drag.toFixed(1) + ' N.</div>';
+  }
+
+  (function method() {
+    var items = [
+      ["Gruppo confrontato", DATA.group.wing + " + " + DATA.group.diff + " (" + DATA.group.cases + " casi)"],
+      ["Riferimento", DATA.baseline],
+      ["Zone con un donatore migliore", DATA.counts.zones],
+      ["Zone accettate (3σ sul rumore)", DATA.counts.usable],
+      ["Famiglie escluse", DATA.exclude_families.join(", ") || "nessuna"],
+      ["Soglia di guadagno", DATA.min_gain.toFixed(1) + " N"]
+    ];
+    document.getElementById("method").innerHTML = items.map(function (item) {
+      return '<li><span>' + item[0] + '</span><span>' + item[1] + '</span></li>';
+    }).join("");
+    document.getElementById("limits").textContent =
+      "La somma dei guadagni presuppone che il comportamento delle zone si sommi: le interazioni " +
+      "fra componenti sono reali e non stanno nei dati. Per questo il risultato e' un'ipotesi da " +
+      "simulare, non un numero promesso. Le zone delle gomme sono escluse per default perche' sono " +
+      "artefatti numerici della parete rotante (spinta, trattamento dello strato limite), non leve " +
+      "di progetto.";
+  })();
+
+  renderTable();
+  renderProposals();
+  renderDetail();
+  document.getElementById("footer").textContent =
+    "Generato il " + DATA.generated + " · Aero Recombination Engine · dati: cas/dat reali elaborati da FS-MetaPostDiag";
+})();
+</script>
+</body>
+</html>

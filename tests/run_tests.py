@@ -18,6 +18,7 @@ if REPO_ROOT not in sys.path:
 MODULES = (
     "tests.test_batch_scripts",
     "tests.test_design_explorer",
+    "tests.test_recombination",
     "tests.test_config_bridge",
     "tests.test_parser_synthetic",
     "tests.test_rules_thresholds",

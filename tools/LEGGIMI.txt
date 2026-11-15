@@ -1,43 +1,44 @@
-Aero Design Explorer
-====================
+Aero Tools — Explorer e Recombination Engine
+===========================================
 
-Trasforma il dataset estratto dal batch in un report interattivo da aprire nel
-browser: mappa dei modelli, tabella, confronto per zona, verifica del modello,
-proposte di prossime simulazioni.
+Due strumenti che leggono il dataset del batch e producono un report HTML
+autonomo (si apre nel browser, nessun server, nessuna libreria da installare).
 
-Requisiti
----------
-Solo Python 3.8 o superiore (nessuna libreria da installare).
+1) design_explorer.py — Aero Design Explorer
+   Mappa dei modelli (deportanza vs resistenza, frontiera di Pareto), tabella
+   ordinabile, confronto per zona tra due casi, verifica del modello
+   (leave-one-out) e cinque simulazioni proposte per riempire i vuoti.
 
-Uso
----
-    python design_explorer.py --data "D:\Analisi\_dati_batch"
+       python design_explorer.py --data "D:\Analisi\_dati_batch"
 
-Produce `Aero_Design_Explorer.html` nella stessa cartella. Opzioni:
+2) recombination.py — Aero Recombination Engine
+   Per ogni zona cerca la configurazione che la produce meglio e ricompone una
+   "vettura sintetica", indicando da quale caso prendere ciascun pezzo.
+   Misura l'affidabilità di ogni zona sulle run doppie (3 sigma), scarta le
+   zone che il rumore non distingue, stima le interfacce da raccordare e
+   propone tre pacchetti incrementali da simulare.
 
-    --out FILE.html     percorso del report
-    --template FILE     template alternativo (default: explorer_template.html)
+       python recombination.py --data "D:\Analisi\_dati_batch"
+       python recombination.py --data "..." --group "RW1" --baseline V9
+       python recombination.py --data "..." --exclude-family "gomme,corpo"
 
-La cartella dei dati deve contenere:
-    dataset.csv         una riga per caso (prodotto da make_tables.py)
-    dataset_pid.csv     una riga per zonaPID (prodotto da make_tables.py)
-    metadata.csv        parametri e note per caso (opzionale ma decisivo)
-    escludi.txt         casi da ignorare (opzionale)
+   Opzioni utili: --group (configurazione), --baseline (caso di riferimento),
+   --min-gain (soglia in N), --exclude-family (famiglie escluse), --out.
 
-Cosa contiene il report
------------------------
-1. Mappa dei modelli: deportanza vs resistenza, frontiera di Pareto.
-2. Tabella ordinabile di tutti i casi (iterazioni, ala, diffusore, modello).
-3. Confronto per zona tra due casi: dove si guadagna e dove si perde, con
-   l'indicazione delle zone presenti in uno solo dei due.
-4. Cosa dicono i dati: modello lineare con validazione leave-one-out (errore
-   onesto), effetto stimato dei parametri, copertura dello spazio di progetto
-   e cinque combinazioni mai provate da simulare per prime.
+Dati richiesti (cartella _dati_batch)
+-------------------------------------
+    dataset.csv       una riga per caso
+    dataset_pid.csv   una riga per zona (forze, area, stallo)
+    *.json            estrazione per caso (per le estensioni x delle zone)
+    metadata.csv      parametri e note (opzionale; migliora l'Explorer)
+    escludi.txt       casi da ignorare (opzionale)
 
 Note
 ----
-- Il modello è li' per dire cosa i dati permettono, non per sostituire la CFD:
-  se l'errore leave-one-out è molto più grande del rumore di misura, il report
-  lo scrive esplicitamente.
-- Le proposte sono scelte per riempire i vuoti dello spazio (massima distanza
-  dai casi esistenti), non sono previsioni di prestazione.
+- Il Recombination Engine è un generatore di ipotesi, non un predittore: la
+  somma dei guadagni per zona presuppone che i comportamenti si sommino, mentre
+  le interazioni fra componenti non sono nei dati. Serve a decidere cosa
+  simulare, non a promettere un numero.
+- Le zone delle gomme sono escluse per default: sono artefatti numerici della
+  parete rotante (spinta, trattamento dello strato limite), non leve di
+  progetto.
