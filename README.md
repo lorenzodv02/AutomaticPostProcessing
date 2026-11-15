@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.10.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.11.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.10.0
+python main.py --version      # FS-MetaPostDiag 1.11.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,25 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.11.0 — estrazione in blocco di molte analisi
+
+La cartella `batch/` contiene tutto per elaborare **decine di casi** su un altro PC, senza installare nulla oltre a Python 3.8+:
+
+| File | Cosa fa |
+|---|---|
+| `01_Estrai_tutti.bat` | chiede la cartella radice (o la accetti trascinandola) e lancia l'estrazione |
+| `02_Tabelle_e_controlli.bat` | costruisce le tabelle e verifica la coerenza |
+| `batch_extract.py` | trova le cartelle con `.cas`+`.dat` (anche annidate), esegue l'exe, salva solo il JSON dei dati (~200 KB/caso) e il log |
+| `make_tables.py` | produce `dataset.csv` (un caso per riga) e `dataset_pid.csv` (un PID per riga), unendo `metadata.csv` |
+| `check_dataset.py` | controlla che i casi siano confrontabili: velocità, convenzione, assieme, numero di PID, simmetria, somma PID = KPI |
+
+- resumibile: i casi già fatti vengono saltati;
+- un caso rotto non ferma gli altri e finisce in `run_summary.txt`;
+- gli HTML da ~80 MB e `output_diagnostics` vengono cancellati dopo ogni caso;
+- `--dry-run` elenca i casi trovati prima di partire.
+
+Verificato su un caso reale (FW5): 1 caso, 135 s, 483,1 N / 222,7 N, 43 PID, tabelle e controlli puliti; caso corrotto gestito con codice di uscita 3.
 
 ### v1.10.0 — cursore velocità nel report
 

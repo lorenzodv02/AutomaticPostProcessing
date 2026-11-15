@@ -1,0 +1,67 @@
+FS-MetaPostDiag - estrazione in blocco
+=====================================
+
+Cosa fa
+-------
+Trova da sola tutte le cartelle che contengono un .cas e un .dat sotto una
+cartella radice (anche annidate, es. Venturi\analisi 1\file.cas), esegue il
+post-processing su ciascuna e salva solo i dati utili:
+
+    _dati_batch\<caso>.json    KPI + forze per PID + config usata (~200 KB)
+    _dati_batch\<caso>.log     output completo di quella esecuzione
+    _dati_batch\index.csv      avanzamento (sopravvive a un'interruzione)
+    _dati_batch\run_summary.txt riepilogo finale
+    _dati_batch\metadata.csv   tabella da compilare a mano (parametri)
+
+Gli HTML da ~80 MB e le immagini vengono cancellati dopo ogni caso
+(con --keep-output e --keep-reports si conservano).
+
+Cosa serve
+----------
+1. Questa cartella, con dentro:
+     01_Estrai_tutti.bat
+     02_Tabelle_e_controlli.bat
+     batch_extract.py
+     make_tables.py
+     check_dataset.py
+     FS-MetaPostDiag.exe        (la stessa versione per TUTTI i casi)
+2. Python 3.8 o superiore installato (con "Add python.exe to PATH").
+   META Post NON serve: si usa --no-meta-batch.
+3. Spazio: ~2-3 GB liberi durante l'elaborazione (vengono liberati ogni volta).
+
+Procedura
+---------
+1) Copia la cartella sull'altro PC. Metti l'exe accanto agli script
+   (oppure indica il percorso quando richiesto).
+2) Fai doppio clic su 01_Estrai_tutti.bat e trascinaci sopra la cartella
+   radice delle analisi.
+   - prima rispondi "s" a "solo l'elenco dei casi" e CONTROLLA che i casi
+     trovati siano quelli giusti;
+   - poi rilancia e lascia che lavori (circa 2 minuti per caso).
+3) Compila metadata.csv con quello che e' cambiato in ogni caso
+   (angoli, altezze, note). Se un parametro non lo sai, lascia vuoto.
+4) Doppio clic su 02_Tabelle_e_controlli.bat: costruisce
+      dataset.csv      (una riga per caso)
+      dataset_pid.csv  (una riga per PID)
+      _controlli.txt   (coerenza: velocita', convenzione, numero di PID,
+                        simmetria, somma PID contro KPI)
+5) Se i controlli sono puliti, il dataset e' pronto per le analisi.
+
+Consigli
+--------
+- Stessa versione dell'exe per tutti i casi (i segni delle forze sono cambiati
+  tra versioni: un dataset misto non e' utilizzabile).
+- Stessa velocita' in tutti i test: se cambia, confronta CL*A e CD*A, non i
+  newton (le forze scalano con v^2).
+- Un caso = una cartella con un solo .cas e un solo .dat.
+- Non lanciare due estrazioni insieme: ogni caso usa diversi GB di RAM.
+- Se un caso va in errore, il log dice perche'; il riepilogo finale elenca i
+  casi da controllare. Rilancia lo stesso comando: i casi gia' fatti vengono
+  saltati.
+
+Uso da riga di comando (equivalente ai .bat)
+--------------------------------------------
+    python batch_extract.py --root "D:\Analisi" --exe .\FS-MetaPostDiag.exe --assembly full_car
+    python batch_extract.py --root "D:\Analisi" --dry-run
+    python make_tables.py   --data "D:\Analisi\_dati_batch"
+    python check_dataset.py --data "D:\Analisi\_dati_batch"

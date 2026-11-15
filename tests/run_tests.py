@@ -16,6 +16,7 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 MODULES = (
+    "tests.test_batch_scripts",
     "tests.test_config_bridge",
     "tests.test_parser_synthetic",
     "tests.test_rules_thresholds",
