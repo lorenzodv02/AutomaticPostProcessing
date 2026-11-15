@@ -23,6 +23,12 @@ AI_PROVIDERS = ("gemini", "openai", "deepseek")
 
 # MIME dichiarato nell'URL inline: DeepSeek riconosce comunque il formato dal
 # contenuto, ma un MIME coerente evita ambiguita' nei proxy.
+# PNG 1x1 trasparente: serve alla prova vision di `deepseek_check`.
+_TINY_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/"
+    "q842iQAAAABJRU5ErkJggg=="
+)
+
 _IMAGE_MIME = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -160,6 +166,8 @@ def deepseek_check(ai_cfg: dict) -> dict:
     model = str(ai_cfg.get("model_deepseek") or DEEPSEEK_DEFAULT_MODEL)
     info = {
         "base_url": DEEPSEEK_BASE_URL,
+        "modalities": [],
+        "vision_supported": None,
         "model": model,
         "key_present": bool(key),
         "key_masked": (key[:4] + "…" + key[-4:]) if len(key) > 8 else ("***" if key else ""),
@@ -168,14 +176,23 @@ def deepseek_check(ai_cfg: dict) -> dict:
         "model_available": None,
         "text_call": "",
         "thinking_call": "",
+        "vision_probe": "",
     }
     if not key:
         return info
 
     try:
         payload = _deepseek_http("GET", "/models", key, None, timeout=20)
-        info["models"] = [str(item.get("id")) for item in (payload.get("data") or []) if item.get("id")]
+        entries = payload.get("data") or []
+        info["models"] = [str(item.get("id")) for item in entries if item.get("id")]
         info["model_available"] = model in info["models"] if info["models"] else None
+        for item in entries:
+            if str(item.get("id")) == model:
+                modalities = item.get("input_modalities")
+                if isinstance(modalities, list):
+                    info["modalities"] = [str(m) for m in modalities]
+                    info["vision_supported"] = "image" in info["modalities"]
+                break
     except urllib.error.HTTPError as exc:
         info["models_error"] = "HTTP %s: %s" % (exc.code, _read_http_error(exc))
     except Exception as exc:
@@ -203,6 +220,33 @@ def deepseek_check(ai_cfg: dict) -> dict:
             info[label] = "HTTP %s: %s" % (exc.code, _read_http_error(exc))
         except Exception as exc:
             info[label] = "%s: %s" % (type(exc).__name__, _short_error(exc))
+
+    # Prova vision: un 1x1 PNG in linea. Se questo fallisce con 400, il modello
+    # della chiave non accetta immagini (ed e' la ragione del "solo testo").
+    vision_body = {
+        "model": model,
+        "messages": [
+            {"role": "user", "content": [
+                {"type": "text", "text": "Quanti pixel ha questa immagine? Rispondi in una riga."},
+                {"type": "image_url",
+                 "image_url": {"url": "data:image/png;base64," + _TINY_PNG_B64}},
+            ]},
+        ],
+        "stream": False,
+        "thinking": {"type": "disabled"},
+    }
+    try:
+        answer = _deepseek_http("POST", "/chat/completions", key, vision_body, timeout=90)
+        text, _reasoning = extract_deepseek_answer(answer)
+        info["vision_probe"] = "ok" + (" (content: %s)" % text[:40] if text else " (senza testo)")
+        if info["vision_supported"] is None:
+            info["vision_supported"] = True
+    except urllib.error.HTTPError as exc:
+        info["vision_probe"] = "HTTP %s: %s" % (exc.code, _read_http_error(exc))
+        if exc.code == 400:
+            info["vision_supported"] = False
+    except Exception as exc:
+        info["vision_probe"] = "%s: %s" % (type(exc).__name__, _short_error(exc))
     return info
 
 

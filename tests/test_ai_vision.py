@@ -253,3 +253,33 @@ def test_retry_without_images_on_http_400():
         assert result["ai_status"]["mode"] == "ai"
     finally:
         shutil.rmtree(folder, ignore_errors=True)
+
+def test_check_reads_input_modalities():
+    def fake_http(method, path, key, body=None, timeout=120):
+        if method == "GET":
+            return {"data": [{"id": "deepseek-flash", "input_modalities": ["text", "image"]}]}
+        return {"choices": [{"message": {"content": "OK"}}]}
+
+    with mock.patch.object(advisor, "_deepseek_http", side_effect=fake_http):
+        info = advisor.deepseek_check({"model_deepseek": "deepseek-flash", "api_key": "k" * 12})
+    assert info["modalities"] == ["text", "image"]
+    assert info["vision_supported"] is True
+    assert info["vision_probe"].startswith("ok")
+
+
+def test_vision_probe_detects_model_without_images():
+    """Se la richiesta con immagine viene rifiutata, il modello non ha vision."""
+    def fake_http(method, path, key, body=None, timeout=120):
+        if method == "GET":
+            return {"data": [{"id": "deepseek-flash", "input_modalities": ["text"]}]}
+        content = body["messages"][0]["content"]
+        if isinstance(content, list):
+            raise _http_error(400, b'{"error":{"message":"model does not support images"}}')
+        return {"choices": [{"message": {"content": "OK"}}]}
+
+    with mock.patch.object(advisor, "_deepseek_http", side_effect=fake_http):
+        info = advisor.deepseek_check({"model_deepseek": "deepseek-flash", "api_key": "k" * 12})
+    assert info["modalities"] == ["text"]
+    assert info["vision_probe"].startswith("HTTP 400")
+    assert "does not support images" in info["vision_probe"]
+    assert info["vision_supported"] is False

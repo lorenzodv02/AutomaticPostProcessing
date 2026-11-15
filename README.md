@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.7.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.7.1
+python main.py --version      # FS-MetaPostDiag 1.8.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,16 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.8.0 — superfici dense nelle immagini e diagnosi della vision
+
+**Immagini.** Il renderer disegnava al massimo **55.000 triangoli** con un subsampling a passo uniforme: sul caso reale (1.529.200 facce) restava il **3,6%**, quindi si vedevano i singoli triangoli con i buchi e la geometria spariva.
+
+- fino a 150.000 triangoli: `tripcolor` vettoriale (contorno fedele);
+- oltre: **rasterizzazione** a livello di pixel (campionamento al baricentro **e** sui tre vertici, poi riempimento dei buchi) → superficie continua, costo lineare, memoria limitata (campione a 4 M triangoli).
+- Nuovo modulo `render_utils.py` (solo numpy, testabile in CI): 1,9 M triangoli resi in ~0,1 s.
+
+**Diagnosi vision.** `--ai-check` e il pulsante *Verifica AI* ora leggono `input_modalities` del modello e fanno una **prova vision con un PNG 1×1**: se il 400 arriva lì, il modello della chiave non accetta immagini — che è la ragione del `solo testo (immagini rifiutate)` (il client riprova senza immagini e lo dichiara).
 
 ### v1.7.1 — "Verifica AI" anche dalla GUI
 

@@ -30,6 +30,7 @@ from meta_driver.fluent_parser import (
     extract_real_mesh_and_cfd_data,
 )
 from meta_driver.ses_generator import generate_meta_session_file
+from render_utils import rasterize_surface as _rasterize_surface
 from config_bridge import (
     cp_range as resolve_cp_range,
     cut_stations as resolve_cut_stations,
@@ -200,16 +201,20 @@ def _safe_tripcolor(
     alpha: float = 1.0,
     shading: str = "flat",
     edgecolors: str = "none",
-    max_render_tris: int = 55000,
+    max_render_tris: int = 150000,
 ):
     """
-    Esegue ax.tripcolor in sicurezza assoluta contro MemoryError e saturazione RAM:
-    se il numero di triangoli della vista supera max_render_tris (default 55,000),
-    esegue un subsampling uniforme dei triangoli preservando l'ordinamento di profondita'
-    e la scala dei valori fisici.
+    Disegna il campo sulla superficie reale.
+
+    - mesh piccole/medie: `tripcolor` vettoriale (contorno fedele);
+    - mesh dense: **rasterizzazione** a livello di pixel (`_rasterize_surface`),
+      che resta continua invece di mostrare i buchi del subsampling.
     """
     n_tris = len(triangles)
     if n_tris > max_render_tris:
+        raster = _rasterize_surface(ax, x, y, triangles, facecolors, cmap, vmin, vmax)
+        if raster is not None:
+            return raster
         step = max(1, n_tris // max_render_tris)
         sub_idx = np.arange(0, n_tris, step, dtype=np.int64)
         tri_sub = triangles[sub_idx]

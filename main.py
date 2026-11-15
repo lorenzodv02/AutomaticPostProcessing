@@ -223,8 +223,15 @@ def main():
                       % info["model"])
         else:
             print("[AI-CHECK] GET /models non ha restituito modelli.")
+        if info["modalities"]:
+            print("[AI-CHECK] modalita' di input dichiarate: %s" % ", ".join(info["modalities"]))
         if info["thinking_call"]:
             print("[AI-CHECK] chiamata con thinking: %s" % info["thinking_call"])
+        if info["vision_probe"]:
+            print("[AI-CHECK] prova vision (PNG 1x1): %s" % info["vision_probe"])
+            if info["vision_supported"] is False:
+                print("[AI-CHECK] questo modello NON accetta immagini: la perizia sara' solo testo. "
+                      "Serve un modello con input 'image'.")
         if info["text_call"]:
             print("[AI-CHECK] chiamata senza thinking: %s" % info["text_call"])
         if info["models_error"] or (info["thinking_call"] and not info["thinking_call"].startswith("ok")):
