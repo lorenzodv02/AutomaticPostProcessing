@@ -95,3 +95,60 @@ def test_degenerate_inputs_return_none():
     # valori disallineati dai triangoli: niente crash
     assert rasterize_surface(ax, np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0]),
                              np.array([[0, 1, 2]]), np.array([1.0, 2.0]), "jet", 0, 1) is None
+
+def _zone(n_tris, name="zona"):
+    """Zona finta con `n_tris` triangoli indipendenti."""
+    pts = np.column_stack([
+        np.arange(n_tris * 3, dtype=float) % 10.0,
+        np.zeros(n_tris * 3),
+        (np.arange(n_tris * 3, dtype=float) // 10.0) % 5.0,
+    ])
+    tris = np.arange(n_tris * 3, dtype=np.int32).reshape((n_tris, 3))
+    return {
+        "nodes": pts,
+        "triangles": tris,
+        "cp": np.linspace(-1.0, 1.0, n_tris),
+        "tau_x": np.linspace(0.0, 5.0, n_tris),
+        "tke": np.linspace(0.0, 2.0, n_tris),
+        "zone_name": name,
+    }
+
+
+def test_combine_keeps_everything_under_budget():
+    from render_utils import combine_zone_meshes
+
+    zones = {1: _zone(1000), 2: _zone(1200)}
+    out = combine_zone_meshes(zones, mirror_symmetry=False, target_budget_triangles=1_500_000)
+    assert out["tris"].shape[0] == 2200
+    assert out["cp"].shape[0] == 2200
+
+
+def test_combine_respects_budget_for_large_zones():
+    from render_utils import combine_zone_meshes
+
+    zones = {1: _zone(200_000), 2: _zone(200_000)}
+    budget = 100_000
+    out = combine_zone_meshes(zones, mirror_symmetry=False, target_budget_triangles=budget)
+    kept = out["tris"].shape[0]
+    assert kept <= budget + 5000, kept
+    assert kept >= budget // 2, kept
+
+
+def test_combine_keeps_small_zones_complete():
+    from render_utils import combine_zone_meshes
+
+    zones = {1: _zone(300, "aletta"), 2: _zone(200_000, "fondo")}
+    out = combine_zone_meshes(zones, mirror_symmetry=False, target_budget_triangles=50_000)
+    small_pid = out["pid_idx"] == 0
+    assert int(np.count_nonzero(small_pid)) == 300
+
+
+def test_combine_mirror_doubles_the_mesh():
+    from render_utils import combine_zone_meshes
+
+    zones = {1: _zone(500)}
+    half = combine_zone_meshes(zones, mirror_symmetry=False, target_budget_triangles=1_500_000)
+    full = combine_zone_meshes(zones, mirror_symmetry=True, target_budget_triangles=1_500_000)
+    assert full["tris"].shape[0] == 2 * half["tris"].shape[0]
+    # la copia specchiata sta sul lato opposto in Z
+    assert full["pts"][:, 2].min() < 0.0

@@ -11,6 +11,8 @@ Il modulo non importa matplotlib: riceve l'oggetto `ax` e chiama `ax.imshow`,
 cosi' resta testabile in CI (che non installa matplotlib).
 """
 
+import warnings
+
 import numpy as np
 
 # Oltre questa soglia si campiona il mesh: per un'immagine da ~1.5 Mpx bastano
@@ -18,7 +20,7 @@ import numpy as np
 MAX_POINTS = 4_000_000
 
 
-def _fill_holes(grid, passes: int = 3):
+def _fill_holes(grid, passes: int = 6):
     """
     Chiude i buchi di 1-2 pixel mediando i vicini finiti.
 
@@ -36,7 +38,10 @@ def _fill_holes(grid, passes: int = 3):
             padded[:-2, 1:-1], padded[2:, 1:-1], padded[1:-1, :-2], padded[1:-1, 2:],
             padded[:-2, :-2], padded[:-2, 2:], padded[2:, :-2], padded[2:, 2:],
         ])
-        with np.errstate(invalid="ignore"):
+        # nanmean su vicini tutti vuoti emette "Mean of empty slice": e' atteso
+        # (quei pixel restano vuoti) e non deve sporcare lo stderr dell'app.
+        with np.errstate(invalid="ignore"), warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
             mean = np.nanmean(neighbours, axis=0)
         fillable = empty & np.isfinite(mean)
         if not np.any(fillable):
@@ -124,3 +129,101 @@ def rasterize_surface(ax, x, y, triangles, facecolors, cmap, vmin, vmax,
         interpolation="bilinear",
         aspect="auto",
     )
+
+
+def combine_zone_meshes(
+    zone_meshes: dict,
+    mirror_symmetry: bool = False,
+    target_budget_triangles: int = 1_500_000,
+):
+    """
+    Combina i triangoli 3D reali di tutti i PID dell'assieme selezionato in array unificati.
+    Se il modello e' half-car simmetrico (Z <= 0) e mirror_symmetry=True, aggiunge anche
+    la copia specchiata (Z >= 0) per visualizzare l'impronta completa del veicolo.
+    Il budget e' alto di proposito: il renderer rasterizza le mesh dense, quindi
+    tenere pochi triangoli serve solo a rendere la geometria irriconoscibile.
+    Il valore e' configurabile da `meta.render_max_triangles`.
+    """
+    valid_zones = []
+    for pid_i, (zid, zm) in enumerate(zone_meshes.items()):
+        pts = zm.get("nodes", zm.get(" nodes"))
+        tris = zm.get("triangles")
+        if pts is None or tris is None or pts.shape[0] == 0 or tris.shape[0] == 0:
+            continue
+        valid_zones.append((pid_i, zid, zm, pts, tris))
+
+    if not valid_zones:
+        return None
+
+    # Se c'e' simmetria, la copia specchiata raddoppia i triangoli: dimezziamo il budget per l'half-car
+    target_half = (target_budget_triangles // 2) if mirror_symmetry else target_budget_triangles
+    total_raw_tris = sum(tris.shape[0] for _, _, _, _, tris in valid_zones)
+
+    # I PID piccoli (<= 800 triangoli, es. alette, flap, endplate sottili) mantengono il 100%
+    # Il budget restante viene ripartito proporzionalmente tra le superfici estese (fondo, telaio, ruote)
+    small_threshold = 800
+    small_tris_sum = sum(tris.shape[0] for _, _, _, _, tris in valid_zones if tris.shape[0] <= small_threshold)
+    large_zones = [z for z in valid_zones if z[4].shape[0] > small_threshold]
+    large_raw_sum = sum(z[4].shape[0] for z in large_zones)
+    avail_for_large = max(5000, target_half - small_tris_sum)
+
+    all_pts, all_tris, all_cp, all_taux, all_tke, all_pid_idx, pid_labels = [], [], [], [], [], [], []
+    offset = 0
+
+    for pid_i, zid, zm, pts, tris in valid_zones:
+        n_pts = pts.shape[0]
+        n_tris = tris.shape[0]
+
+        if total_raw_tris <= target_half or n_tris <= small_threshold:
+            tris_sub = tris
+            cp_sub = zm["cp"]
+            taux_sub = zm["tau_x"]
+            tke_sub = zm["tke"]
+        else:
+            weight = n_tris / max(large_raw_sum, 1)
+            allocated = max(small_threshold, int(avail_for_large * weight))
+            step = max(1, n_tris // allocated)
+            sel = np.arange(0, n_tris, step, dtype=np.int64)
+            tris_sub = tris[sel]
+            cp_sub = zm["cp"][sel]
+            taux_sub = zm["tau_x"][sel]
+            tke_sub = zm["tke"][sel]
+
+        all_pts.append(pts)
+        all_tris.append(tris_sub + offset)
+        all_cp.append(cp_sub)
+        all_taux.append(taux_sub)
+        all_tke.append(tke_sub)
+        all_pid_idx.append(np.full(tris_sub.shape[0], pid_i, dtype=np.int32))
+        pid_labels.append({
+            "pid_index": pid_i,
+            "zone_id": zid,
+            "zone_name": zm.get("zone_name", zm.get("name", f"PID_{zid}")),
+            "n_triangles": int(n_tris),
+            "centroid": [float(np.mean(pts[:, 0])), float(np.mean(pts[:, 1])), float(np.mean(pts[:, 2]))],
+        })
+        offset += n_pts
+
+        if mirror_symmetry:
+            pts_mir = pts.copy()
+            pts_mir[:, 2] = -pts_mir[:, 2]
+            all_pts.append(pts_mir)
+            all_tris.append(tris_sub + offset)
+            all_cp.append(cp_sub)
+            all_taux.append(taux_sub)
+            all_tke.append(tke_sub)
+            all_pid_idx.append(np.full(tris_sub.shape[0], pid_i, dtype=np.int32))
+            offset += n_pts
+
+    if not all_pts:
+        return None
+
+    return {
+        "pts": np.vstack(all_pts),
+        "tris": np.vstack(all_tris),
+        "cp": np.concatenate(all_cp),
+        "tau_x": np.concatenate(all_taux),
+        "tke": np.concatenate(all_tke),
+        "pid_idx": np.concatenate(all_pid_idx),
+        "pid_labels": pid_labels,
+    }

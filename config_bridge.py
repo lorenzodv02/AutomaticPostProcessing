@@ -89,6 +89,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "meta": {
         "executable_path": "auto",
         "batch_mode": True,
+        "render_max_triangles": 1500000,
         "image_width": 1920,
         "image_height": 1080,
         "background_color": "white",

@@ -30,7 +30,10 @@ from meta_driver.fluent_parser import (
     extract_real_mesh_and_cfd_data,
 )
 from meta_driver.ses_generator import generate_meta_session_file
-from render_utils import rasterize_surface as _rasterize_surface
+from render_utils import (
+    combine_zone_meshes as _combine_real_zone_meshes,
+    rasterize_surface as _rasterize_surface,
+)
 from config_bridge import (
     cp_range as resolve_cp_range,
     cut_stations as resolve_cut_stations,
@@ -90,103 +93,6 @@ def _is_valid_meta_screenshot(img_path: str) -> bool:
         return True
     except Exception:
         return False
-
-
-def _combine_real_zone_meshes(
-    zone_meshes: dict,
-    mirror_symmetry: bool = False,
-    target_budget_triangles: int = 70000,
-):
-    """
-    Combina i triangoli 3D reali di tutti i PID dell'assieme selezionato in array unificati.
-    Se il modello e' half-car simmetrico (Z <= 0) e mirror_symmetry=True, aggiunge anche
-    la copia specchiata (Z >= 0) per visualizzare l'impronta completa del veicolo.
-    Implementa subsampling intelligente proporzionale per mantenere la memoria e i tempi
-    di rendering leggeri anche su PC con poca RAM o mesh da milioni di elementi.
-    """
-    valid_zones = []
-    for pid_i, (zid, zm) in enumerate(zone_meshes.items()):
-        pts = zm.get("nodes", zm.get(" nodes"))
-        tris = zm.get("triangles")
-        if pts is None or tris is None or pts.shape[0] == 0 or tris.shape[0] == 0:
-            continue
-        valid_zones.append((pid_i, zid, zm, pts, tris))
-
-    if not valid_zones:
-        return None
-
-    # Se c'e' simmetria, la copia specchiata raddoppia i triangoli: dimezziamo il budget per l'half-car
-    target_half = (target_budget_triangles // 2) if mirror_symmetry else target_budget_triangles
-    total_raw_tris = sum(tris.shape[0] for _, _, _, _, tris in valid_zones)
-
-    # I PID piccoli (<= 800 triangoli, es. alette, flap, endplate sottili) mantengono il 100%
-    # Il budget restante viene ripartito proporzionalmente tra le superfici estese (fondo, telaio, ruote)
-    small_threshold = 800
-    small_tris_sum = sum(tris.shape[0] for _, _, _, _, tris in valid_zones if tris.shape[0] <= small_threshold)
-    large_zones = [z for z in valid_zones if z[4].shape[0] > small_threshold]
-    large_raw_sum = sum(z[4].shape[0] for z in large_zones)
-    avail_for_large = max(5000, target_half - small_tris_sum)
-
-    all_pts, all_tris, all_cp, all_taux, all_tke, all_pid_idx, pid_labels = [], [], [], [], [], [], []
-    offset = 0
-
-    for pid_i, zid, zm, pts, tris in valid_zones:
-        n_pts = pts.shape[0]
-        n_tris = tris.shape[0]
-
-        if total_raw_tris <= target_half or n_tris <= small_threshold:
-            tris_sub = tris
-            cp_sub = zm["cp"]
-            taux_sub = zm["tau_x"]
-            tke_sub = zm["tke"]
-        else:
-            weight = n_tris / max(large_raw_sum, 1)
-            allocated = max(small_threshold, int(avail_for_large * weight))
-            step = max(1, n_tris // allocated)
-            sel = np.arange(0, n_tris, step, dtype=np.int64)
-            tris_sub = tris[sel]
-            cp_sub = zm["cp"][sel]
-            taux_sub = zm["tau_x"][sel]
-            tke_sub = zm["tke"][sel]
-
-        all_pts.append(pts)
-        all_tris.append(tris_sub + offset)
-        all_cp.append(cp_sub)
-        all_taux.append(taux_sub)
-        all_tke.append(tke_sub)
-        all_pid_idx.append(np.full(tris_sub.shape[0], pid_i, dtype=np.int32))
-        pid_labels.append({
-            "pid_index": pid_i,
-            "zone_id": zid,
-            "zone_name": zm.get("zone_name", zm.get("name", f"PID_{zid}")),
-            "n_triangles": int(n_tris),
-            "centroid": [float(np.mean(pts[:, 0])), float(np.mean(pts[:, 1])), float(np.mean(pts[:, 2]))],
-        })
-        offset += n_pts
-
-        if mirror_symmetry:
-            pts_mir = pts.copy()
-            pts_mir[:, 2] = -pts_mir[:, 2]
-            all_pts.append(pts_mir)
-            all_tris.append(tris_sub + offset)
-            all_cp.append(cp_sub)
-            all_taux.append(taux_sub)
-            all_tke.append(tke_sub)
-            all_pid_idx.append(np.full(tris_sub.shape[0], pid_i, dtype=np.int32))
-            offset += n_pts
-
-    if not all_pts:
-        return None
-
-    return {
-        "pts": np.vstack(all_pts),
-        "tris": np.vstack(all_tris),
-        "cp": np.concatenate(all_cp),
-        "tau_x": np.concatenate(all_taux),
-        "tke": np.concatenate(all_tke),
-        "pid_idx": np.concatenate(all_pid_idx),
-        "pid_labels": pid_labels,
-    }
 
 
 def _safe_tripcolor(
@@ -560,6 +466,7 @@ def _render_real_unpacked_mesh_views(
     cp_range: tuple = None,
     x_stations: list = None,
     z_stations: list = None,
+    render_max_triangles: int = 1500000,
 ) -> list:
     """
     Renderizza le viste diagnostiche proiettando DIRETTAMENTE i veri triangoli 3D e i veri campi CFD
@@ -580,8 +487,10 @@ def _render_real_unpacked_mesh_views(
     # Va definita qui, prima delle mappe di superficie e delle sezioni X/Z.
     vmin_cp_global, vmax_cp_global = tuple(cp_range) if cp_range else (-3.0, 1.0)
 
-    mesh_full = _combine_real_zone_meshes(zone_meshes, mirror_symmetry=is_sym)
-    mesh_half = _combine_real_zone_meshes(zone_meshes, mirror_symmetry=False)
+    mesh_full = _combine_real_zone_meshes(zone_meshes, mirror_symmetry=is_sym,
+                                    target_budget_triangles=render_max_triangles)
+    mesh_half = _combine_real_zone_meshes(zone_meshes, mirror_symmetry=False,
+                                          target_budget_triangles=render_max_triangles)
     if mesh_full is None or mesh_half is None:
         return []
 
@@ -1717,6 +1626,7 @@ def run_postprocessing_session(config: dict, workspace_dir: str = None, force_me
         cp_range=resolve_cp_range(config, assembly_type),
         x_stations=resolve_cut_stations(config, assembly_type)[0],
         z_stations=resolve_cut_stations(config, assembly_type)[1],
+        render_max_triangles=int(config.get("meta", {}).get("render_max_triangles", 1500000)),
     )
 
     session_bundle = {

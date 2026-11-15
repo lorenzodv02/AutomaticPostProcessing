@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.8.1-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.8.0
+python main.py --version      # FS-MetaPostDiag 1.8.1
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,16 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.8.1 — il budget dei triangoli (la vera causa delle immagini "puntinate")
+
+La v1.8.0 aveva tolto il collo di bottiglia nel renderer, ma i triangoli venivano gia' **scartati prima**, in `_combine_real_zone_meshes(target_budget_triangles=70000)`: sul caso FW5 restavano **103.908** triangoli su 1.529.200 (il numero che compariva nel titolo dell'immagine).
+
+- budget alzato a **1.500.000** e reso configurabile: `meta.render_max_triangles` (30 MB di RAM ogni ~500k triangoli);
+- il combiner è passato in `render_utils.py` (solo numpy) con 4 test: budget rispettato, zone piccole mai tagliate, mirror che raddoppia;
+- il combinatore non emette più `RuntimeWarning: Mean of empty slice` sullo stderr.
+
+Misura sul caso reale FW5: budget 70.000 → 103.908 triangoli; budget 1.500.000 → **1.529.226**; render delle 24 viste in 47,9 s. La geometria (muso, fondo, sospensioni, ruote, diffusore) diventa riconoscibile.
 
 ### v1.8.0 — superfici dense nelle immagini e diagnosi della vision
 

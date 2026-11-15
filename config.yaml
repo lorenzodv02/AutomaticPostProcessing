@@ -64,6 +64,10 @@ meta:
   # Percorso BETA CAE META Post v25.1 (o "auto" per ricerca automatica nei percorsi standard Windows)
   executable_path: "auto"
   batch_mode: true
+  render_max_triangles: 1500000
+                           # Triangoli usati per le viste diagnostiche. Basso = immagini
+                           # "puntinate" con la geometria irriconoscibile; alto = immagini
+                           # continue ma piu' RAM (circa 30 MB ogni 500k triangoli).
   batch_timeout_s: 360     # Secondi massimi concessi a META Post prima di proseguire
                            # (le immagini vengono comunque generate in Python)
   image_width: 1920
