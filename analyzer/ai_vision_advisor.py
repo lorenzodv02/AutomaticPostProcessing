@@ -23,11 +23,31 @@ AI_PROVIDERS = ("gemini", "openai", "deepseek")
 
 # MIME dichiarato nell'URL inline: DeepSeek riconosce comunque il formato dal
 # contenuto, ma un MIME coerente evita ambiguita' nei proxy.
-# PNG 1x1 trasparente: serve alla prova vision di `deepseek_check`.
-_TINY_PNG_B64 = (
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/"
-    "q842iQAAAABJRU5ErkJggg=="
-)
+def _tiny_png_bytes() -> bytes:
+    """
+    PNG 1x1 nero **valido**, costruito a runtime (struct + zlib, nessun file).
+
+    La versione precedente incorporava una stringa base64 scritta a mano che era
+    corrotta: il server la rifiutava e la prova vision avrebbe dato un falso
+    negativo ("il modello non accetta immagini"). Costruirlo e' verificabile.
+    """
+    import struct
+    import zlib
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return (struct.pack(">I", len(data)) + tag + data
+                + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
+
+    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)   # 1x1, 8 bit, RGB
+    idat = zlib.compress(b"\x00" + b"\x00\x00\x00", 9)   # filtro 0 + pixel nero
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", ihdr)
+            + chunk(b"IDAT", idat)
+            + chunk(b"IEND", b""))
+
+
+# PNG 1x1 usato dalla prova vision di `deepseek_check`.
+_TINY_PNG_B64 = base64.b64encode(_tiny_png_bytes()).decode("ascii")
 
 _IMAGE_MIME = {
     ".png": "image/png",
@@ -170,7 +190,7 @@ def deepseek_check(ai_cfg: dict) -> dict:
         "vision_supported": None,
         "model": model,
         "key_present": bool(key),
-        "key_masked": (key[:4] + "…" + key[-4:]) if len(key) > 8 else ("***" if key else ""),
+        "key_masked": (key[:4] + "..." + key[-4:]) if len(key) > 8 else ("***" if key else ""),
         "models": [],
         "models_error": "",
         "model_available": None,

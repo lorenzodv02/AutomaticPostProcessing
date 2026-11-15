@@ -283,3 +283,31 @@ def test_vision_probe_detects_model_without_images():
     assert info["vision_probe"].startswith("HTTP 400")
     assert "does not support images" in info["vision_probe"]
     assert info["vision_supported"] is False
+
+
+def test_tiny_probe_png_is_valid():
+    """
+    Il PNG della prova vision deve essere un'immagine valida: se fosse corrotto
+    il server risponderebbe 400 e la diagnostica direbbe (falsamente) che il
+    modello non accetta immagini.
+    """
+    import base64
+    import struct
+    import zlib
+
+    raw = base64.b64decode(advisor._TINY_PNG_B64)
+    assert raw[:8] == b"\x89PNG\r\n\x1a\n", "firma PNG mancante"
+    assert raw[-12:] .startswith(b"\x00\x00\x00\x00IEND"), "chunk IEND mancante"
+
+    # IHDR: subito dopo la firma
+    assert raw[12:16] == b"IHDR"
+    width, height, bit_depth, color_type = struct.unpack(">IIBB", raw[16:26])
+    assert (width, height) == (1, 1)
+    assert bit_depth == 8
+    assert color_type == 2      # RGB
+
+    # IDAT deve decomprimere a una scanline valida (filtro 0 + 3 byte RGB)
+    idat_start = raw.index(b"IDAT") + 4
+    idat_len = struct.unpack(">I", raw[idat_start - 8:idat_start - 4])[0]
+    pixels = zlib.decompress(raw[idat_start:idat_start + idat_len])
+    assert pixels == b"\x00\x00\x00\x00", pixels

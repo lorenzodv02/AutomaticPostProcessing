@@ -175,6 +175,14 @@ def main():
         help="Modello AI Vision Advisor (default: dal config.yaml, es. gemini-3.8-flash)",
     )
     parser.add_argument(
+        "--ai-key", type=str, default=None,
+        help="API key AI Vision da usare in questa esecuzione (non viene salvata su disco)",
+    )
+    parser.add_argument(
+        "--ai-provider", type=str, default=None,
+        help="Provider AI Vision da usare in questa esecuzione: gemini | openai | deepseek",
+    )
+    parser.add_argument(
         "--ai-check", action="store_true",
         help="Verifica la configurazione AI Vision (chiave, modelli disponibili, chiamata minima) ed esce",
     )
@@ -193,6 +201,10 @@ def main():
         cfg["project"]["assembly_type"] = args.assembly
     if args.meta_exe:
         cfg["meta"]["executable_path"] = args.meta_exe
+    if args.ai_provider:
+        cfg.setdefault("ai_vision", {})["provider"] = args.ai_provider.strip().lower()
+    if args.ai_key:
+        cfg.setdefault("ai_vision", {})["api_key"] = args.ai_key.strip()
     if args.ai_model:
         provider = str(cfg.get("ai_vision", {}).get("provider", "gemini")).strip().lower()
         model_key = {
@@ -213,7 +225,9 @@ def main():
         info = deepseek_check(ai_cfg)
         print("[AI-CHECK] endpoint: %s" % info["base_url"])
         print("[AI-CHECK] modello richiesto: %s" % info["model"])
-        print("[AI-CHECK] chiave: %s" % ("presente (" + info["key_masked"] + ")" if info["key_present"] else "ASSENTE"))
+        print("[AI-CHECK] chiave: %s" % (
+            "presente (" + info["key_masked"] + ")" if info["key_present"]
+            else "ASSENTE (passa --ai-key sk-... oppure imposta DEEPSEEK_API_KEY)"))
         if info["models_error"]:
             print("[AI-CHECK] errore su GET /models -> %s" % info["models_error"])
         elif info["models"]:

@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.8.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.8.2-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.8.1
+python main.py --version      # FS-MetaPostDiag 1.8.2
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,19 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.8.2 — `--ai-check` usabile da terminale, e un PNG di prova che era corrotto
+
+Due problemi reali che impedivano la diagnosi:
+
+- **La chiave si poteva inserire solo nella GUI** (lì resta in memoria, non viene salvata su disco). Da terminale `--ai-check` vedeva il config incluso, senza chiave. Ora: `--ai-key sk-...` e `--ai-provider deepseek|gemini|openai`, validi per il controllo **e** per l'esecuzione. La chiave passata da riga di comando **non** viene scritta su disco.
+- **Il PNG 1×1 della prova vision era corrotto** (una stringa base64 scritta a mano): il server lo rifiutava, quindi la prova avrebbe potuto dire "il modello non accetta immagini" per colpa nostra. Ora il PNG è costruito a runtime (`struct` + `zlib`) e c'è un test che ne verifica firma, IHDR, IDAT e IEND.
+
+```bash
+FS-MetaPostDiag.exe --ai-check --ai-key sk-xxxxxxxx
+# oppure, senza argomenti:
+$env:DEEPSEEK_API_KEY = "sk-xxxxxxxx"; FS-MetaPostDiag.exe --ai-check
+```
 
 ### v1.8.1 — il budget dei triangoli (la vera causa delle immagini "puntinate")
 
