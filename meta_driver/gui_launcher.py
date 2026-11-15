@@ -50,10 +50,12 @@ FAMILIES = _families()
 FONT_UI = FAMILIES["ui"]
 FONT_NUM = FAMILIES["num"]
 
-ASSEMBLIES = [("undertray", "solo fondo"), ("front_wing", "ala anteriore"),
-              ("rear_wing", "ala posteriore"), ("full_car", "vettura completa")]
-ASSEMBLY_LABELS = {value: label for value, label in ASSEMBLIES}
-ASSEMBLY_VALUES = {label: value for value, label in ASSEMBLIES}
+from meta_driver.assemblies import (  # noqa: E402
+    ASSEMBLY_CHOICES, ASSEMBLY_LABELS, CASE_DEFAULT_LABEL, LABEL_TO_ASSEMBLY,
+)
+
+ASSEMBLIES = ASSEMBLY_CHOICES
+ASSEMBLY_VALUES = LABEL_TO_ASSEMBLY
 
 
 def _frozen_exe() -> str:
@@ -327,6 +329,28 @@ class LauncherApp:
             entry.delete(0, "end")
             entry.insert(0, folder)
 
+    def _assembly_row(self, parent, attribute, default_label, include_case_default=False):
+        """Riga 'Assieme' con etichette italiane; restituisce la StringVar."""
+        row = tk.Frame(parent, bg=brand.NAVY_PANEL)
+        row.pack(fill="x", pady=(0, 8))
+        tk.Label(row, text="Assieme", width=16, anchor="w", bg=brand.NAVY_PANEL,
+                 fg=brand.TEXT_MUTED, font=(FONT_UI, 9)).pack(side="left")
+        variable = tk.StringVar(value=default_label)
+        setattr(self, attribute, variable)
+        labels = ([CASE_DEFAULT_LABEL] if include_case_default else []) + \
+                 [label for _value, label in ASSEMBLY_CHOICES]
+        menu = tk.OptionMenu(row, variable, *labels)
+        menu.configure(bg=brand.INPUT_BG, fg=brand.ICE, activebackground=brand.VIOLET,
+                       activeforeground=brand.WHITE, highlightthickness=0, bd=0,
+                       font=(FONT_UI, 9))
+        menu["menu"].configure(bg=brand.NAVY_PANEL, fg=brand.ICE,
+                               activebackground=brand.VIOLET, activeforeground=brand.WHITE,
+                               font=(FONT_UI, 9))
+        menu.pack(side="left", padx=(0, 8))
+        tk.Label(row, text="auto = rileva dal .cas", bg=brand.NAVY_PANEL,
+                 fg=brand.TEXT_FAINT, font=(FONT_UI, 8)).pack(side="left")
+        return variable
+
     def _check(self, parent, text, attribute, default=False):
         var = tk.BooleanVar(value=default)
         setattr(self, attribute, var)
@@ -342,6 +366,7 @@ class LauncherApp:
                                      "(.cas + .dat): mesh, forze, immagini, META, report HTML/PDF.")
         body = self._inner(card)
         self._folder_row(body, "Cartella del caso", "single_dir")
+        self._assembly_row(body, "single_assembly", ASSEMBLY_LABELS["auto"])
         self._check(body, "Salta il rendering META (più veloce)", "single_skip_meta")
         self._check(body, "Apri il report alla fine", "single_open_report", default=True)
         self._GradientButton(body, text="Avvia analisi", command=self._start_single,
@@ -355,20 +380,7 @@ class LauncherApp:
         body = self._inner(card)
         self._folder_row(body, "Cartella radice", "batch_root")
         self._folder_row(body, "Cartella dati", "batch_out")
-        row = tk.Frame(body, bg=brand.NAVY_PANEL)
-        row.pack(fill="x", pady=(0, 8))
-        tk.Label(row, text="Assieme", width=16, anchor="w", bg=brand.NAVY_PANEL,
-                 fg=brand.TEXT_MUTED, font=(FONT_UI, 9)).pack(side="left")
-        self.batch_assembly = tk.StringVar(value=ASSEMBLY_LABELS["full_car"])
-        menu = tk.OptionMenu(row, self.batch_assembly,
-                             *[label for _name, label in ASSEMBLIES])
-        menu.configure(bg=brand.INPUT_BG, fg=brand.ICE, activebackground=brand.VIOLET,
-                       activeforeground=brand.WHITE, highlightthickness=0, bd=0,
-                       font=(FONT_UI, 9))
-        menu["menu"].configure(bg=brand.NAVY_PANEL, fg=brand.ICE,
-                               activebackground=brand.VIOLET, activeforeground=brand.WHITE,
-                               font=(FONT_UI, 9))
-        menu.pack(side="left")
+        self._assembly_row(body, "batch_assembly", ASSEMBLY_LABELS["auto"])
         self._check(body, "Rifai anche i casi già fatti", "batch_force")
         self._check(body, "Genera anche i report completi per ogni caso", "batch_full")
         self._GradientButton(body, text="Avvia batch", command=self._start_batch,
@@ -393,6 +405,8 @@ class LauncherApp:
                                      "dataset.csv): geometria, tabelle e dashboard.")
         body = self._inner(card)
         self._folder_row(body, "Cartella dati", "suite_dir")
+        self._assembly_row(body, "suite_assembly", CASE_DEFAULT_LABEL,
+                           include_case_default=True)
         self._check(body, "I report completi per caso sono già stati fatti",
                     "suite_reports_done", default=True)
         self._GradientButton(body, text="Avvia suite", command=self._start_suite,
@@ -404,6 +418,7 @@ class LauncherApp:
                                      "superfici per famiglia. Nessun report.")
         body = self._inner(card)
         self._folder_row(body, "Cartella del caso", "geometry_dir")
+        self._assembly_row(body, "geometry_assembly", ASSEMBLY_LABELS["auto"])
         self._GradientButton(body, text="Calcola geometria", command=self._start_geometry,
                        width=240, height=42).pack(anchor="w", pady=(8, 2))
         return card
@@ -512,6 +527,8 @@ class LauncherApp:
 
             local = copy.deepcopy(self.cfg)
             local.setdefault("project", {})["workspace_dir"] = folder
+            local["project"]["assembly_type"] = ASSEMBLY_VALUES.get(
+                self.single_assembly.get(), "auto")
             result = self.pipeline(local, workspace_dir=folder, force_meta_batch=not skip_meta)
             reports = (result or {}).get("reports") or {}
             html = reports.get("html_report") or reports.get("standalone_html_report")
@@ -528,7 +545,8 @@ class LauncherApp:
             messagebox.showwarning("Cartella mancante", "Scegli la cartella radice delle analisi.",
                                    parent=self.root)
             return
-        assembly = ASSEMBLY_VALUES.get(self.batch_assembly.get(), "full_car")
+        assembly = ASSEMBLY_VALUES.get(self.batch_assembly.get(), "auto")
+        self._append("Assieme del batch: %s\n" % assembly)
         force = self.batch_force.get()
         full = self.batch_full.get()
         self.last_output_dir = out_dir
@@ -638,11 +656,18 @@ class LauncherApp:
             self.queue.put(("text", "\nSuite:\n"))
             suite_args = type("Args", (), {"workspace": out_dir, "force": False,
                                            "skip_process": not full, "no_meta_batch": True,
-                                           "only": None})()
+                                           "only": None,
+                                           "assembly": self._suite_assembly_override()})()
             run_suite(copy.deepcopy(self.cfg), suite_args, self.pipeline)
             self.queue.put(("done", "Batch completato."))
 
         self._start_job("Multi-caso", job)
+
+    def _suite_assembly_override(self):
+        label = self.suite_assembly.get()
+        if label == CASE_DEFAULT_LABEL:
+            return None
+        return ASSEMBLY_VALUES.get(label, "auto")
 
     def _start_suite(self):
         folder = self.suite_dir.get().strip().strip('"')
@@ -657,7 +682,8 @@ class LauncherApp:
 
             suite_args = type("Args", (), {"workspace": folder, "force": False,
                                            "skip_process": skip_process,
-                                           "no_meta_batch": True, "only": None})()
+                                           "no_meta_batch": True, "only": None,
+                                           "assembly": self._suite_assembly_override()})()
             run_suite(self.cfg, suite_args, self.pipeline)
             webbrowser.open("file:///" + os.path.join(folder, "Aero_Suite.html").replace(os.sep, "/"))
 
@@ -673,7 +699,9 @@ class LauncherApp:
         def job():
             from meta_driver.suite_mode import geometry_for_workspace
 
-            result = geometry_for_workspace(self.cfg, folder)
+            result = geometry_for_workspace(
+                self.cfg, folder,
+                ASSEMBLY_VALUES.get(self.geometry_assembly.get(), "auto"))
             payload = result["payload"]
             geometry = payload.get("geometry") or {}
             self.queue.put(("text", "Caso %s: %d zone | fondo %s | ali %s/%s\n"

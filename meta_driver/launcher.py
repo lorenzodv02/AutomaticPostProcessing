@@ -1542,9 +1542,10 @@ def run_postprocessing_session(config: dict, workspace_dir: str = None, force_me
     _purge_previous_outputs(output_dir)
 
     cas_file, dat_file = discover_cas_dat(workspace_dir)
-    requested_asm = config.get("project", {}).get("assembly_type", "undertray")
-    if requested_asm == "auto":
-        requested_asm = "undertray"
+    # "auto" resta "auto": il parser rileva l'assieme dalle zone del .cas
+    # (`detected_assembly`). Prima veniva forzato a undertray e ogni analisi
+    # sembrava del solo fondo.
+    requested_asm = config.get("project", {}).get("assembly_type", "auto") or "auto"
 
     log_fn(f"[LAUNCHER] Estrazione diretta mesh 3D e campi CFD da: {cas_file} & {dat_file}")
     real_extraction = extract_real_mesh_and_cfd_data(

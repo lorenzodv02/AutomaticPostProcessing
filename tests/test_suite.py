@@ -260,3 +260,10 @@ def test_stage_process_skips_existing_cases():
         assert total == 1
     finally:
         shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_assembly_for_prefers_case_then_override():
+    assert suite.assembly_for({"assembly": "front_wing"}) == "front_wing"
+    assert suite.assembly_for({"assembly": "front_wing"}, "full_car") == "full_car"
+    assert suite.assembly_for({}, None) == "auto"
+    assert suite.assembly_for({"assembly": ""}, None) == "auto"

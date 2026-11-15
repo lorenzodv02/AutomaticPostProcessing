@@ -62,7 +62,9 @@ def geometry_for_workspace(cfg: dict, workspace_dir: str, assembly: str = None) 
     cas_file, dat_file, discovery_error = try_discover(workspace_dir)
     if not cas_file:
         raise FileNotFoundError(discovery_error or ("nessun .cas in " + workspace_dir))
-    chosen = assembly or ((cfg.get("project") or {}).get("assembly_type") or "undertray")
+    from meta_driver.assemblies import resolve_assembly
+
+    chosen = resolve_assembly(override=assembly, config_assembly="auto")
     convention = ((cfg.get("reference_values") or {}).get("report_force_convention") or "lift")
     data = extract_real_mesh_and_cfd_data(
         cas_path=cas_file, dat_path=dat_file, assembly_type=chosen,
@@ -92,15 +94,20 @@ def geometry_for_workspace(cfg: dict, workspace_dir: str, assembly: str = None) 
     return {"payload": payload, "path": path}
 
 
-def _case_processor(cfg: dict, pipeline, no_meta: bool):
+def _case_processor(cfg: dict, pipeline, no_meta: bool, assembly_override=None):
     """Restituisce il callable che esegue la pipeline completa su un caso."""
 
     def process(case_dir: str, case: dict):
+        from meta_driver.assemblies import resolve_assembly
+
         local = copy.deepcopy(cfg)
         project = local.setdefault("project", {})
         project["workspace_dir"] = case_dir
-        if case.get("assembly"):
-            project["assembly_type"] = case["assembly"]
+        chosen = resolve_assembly(override=assembly_override,
+                                  case_assembly=case.get("assembly"),
+                                  config_assembly="auto")
+        project["assembly_type"] = chosen
+        print("[SUITE] assieme: %s" % chosen)
         tries = 2
         last_error = None
         for _attempt in range(tries):
@@ -114,10 +121,15 @@ def _case_processor(cfg: dict, pipeline, no_meta: bool):
     return process
 
 
-def _geometry_processor(cfg: dict):
+def _geometry_processor(cfg: dict, assembly_override=None):
     def process(case_dir: str, case: dict):
+        from meta_driver.assemblies import resolve_assembly
+
         local = copy.deepcopy(cfg)
-        return geometry_for_workspace(local, case_dir, case.get("assembly"))
+        chosen = resolve_assembly(override=assembly_override,
+                                  case_assembly=case.get("assembly"),
+                                  config_assembly="auto")
+        return geometry_for_workspace(local, case_dir, chosen)
 
     return process
 
@@ -135,6 +147,7 @@ def run_suite(cfg: dict, args, pipeline) -> int:
         return 2
     tools = _tools_dir()
     no_meta = bool(getattr(args, "no_meta_batch", False))
+    assembly_override = getattr(args, "assembly", None)
     only = [name.strip() for name in (getattr(args, "only", None) or "").split(",") if name.strip()] or None
     print("[SUITE] cartella dati: %s" % data_dir)
     failures = 0
@@ -142,14 +155,14 @@ def run_suite(cfg: dict, args, pipeline) -> int:
         print("\n[1/4] report completi per ogni caso (in-process)")
         _total, failed = suite.stage_process(
             data_dir, exe=None, force=getattr(args, "force", False),
-            processor=_case_processor(cfg, pipeline, no_meta), only=only)
+            processor=_case_processor(cfg, pipeline, no_meta, assembly_override), only=only)
         failures += failed
     else:
         print("\n[1/4] report completi saltati (--skip-process)")
     print("\n[2/4] geometria dalla mesh")
     _total, failed = suite.stage_geometry(
         data_dir, exe=None, force=getattr(args, "force", False), only=only,
-        processor=_geometry_processor(cfg))
+        processor=_geometry_processor(cfg, assembly_override))
     failures += failed
     print("\n[3/4] tabelle")
     suite.stage_tables(data_dir)

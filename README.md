@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.22.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.23.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.22.0
+python main.py --version      # FS-MetaPostDiag 1.23.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,21 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.23.0 — Basta "tutto undertray": assieme auto e selettore nel launcher
+
+Due bug facevano sembrare ogni analisi del solo fondo:
+
+1. `launcher.py` trasformava `auto` in `undertray` **prima** dell'estrazione, uccidendo il rilevamento del `.cas`;
+2. Il rilevamento stesso (`detected_assembly`) contava le zone con il **fallback delle keyword**: con il fondo presente classificava sempre `undertray`.
+
+Ora:
+
+- **rilevamento per nomi delle zone** (`detect_assembly_from_names`): fondo + ala anteriore + ala posteriore → `full_car`; una sola famiglia → il suo assieme; niente riconoscibile → `full_car` (non si perde nulla); ruote e sospensioni non contano come ali;
+- **default `auto`** in tutta la suite (geometria, launcher, suite per caso), non più l'`undertray` del config;
+- **selettore "Assieme"** nel launcher per singolo caso, geometria, suite (con "Dall'analisi (per caso)") e batch; etichette italiane;
+- la suite usa l'assieme della riga del dataset, poi l'override scelto, altrimenti `auto`; `--assembly` disponibile anche da riga di comando;
+- verifica su FW5: da **5 zone** (undertray) a **43 zone** (full car) con ali anteriori e posteriori; pipeline completa con `-a auto` → "Assieme selezionato: FULL_CAR".
 
 ### v1.22.0 — Il launcher parte da solo (niente `--launcher`)
 

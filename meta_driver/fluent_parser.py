@@ -199,6 +199,47 @@ def filter_zones_for_assembly(aero_zones: list, assembly_type: str, config: dict
     return selected if selected else list(aero_zones)
 
 
+FRONT_WING_NAME_PREFIXES = (
+    "front_main", "front_first", "front_second", "front_third", "front_fourth",
+    "front_fifth", "front_sixth", "front_extra", "front_external", "front_internal",
+    "front_midplate", "front_footplate", "inverted", "endplate_flap", "flap_verticali",
+)
+NON_WING_REAR_PREFIXES = ("rear_tyre", "rear_suspension", "rear_wheel")
+
+
+def detect_assembly_from_names(names) -> str:
+    """
+    Rileva l'assieme guardando i NOMI delle zone aero, senza dipendere dalle
+    keyword di configurazione (il cui fallback faceva sembrare tutto undertray).
+
+    Fondo + ala anteriore + ala posteriore -> full_car; una sola famiglia ->
+    il suo assieme; niente riconoscibile -> full_car (non si perde nulla).
+    """
+    floor = front = rear = 0
+    for raw in names:
+        name = str(raw or "").lower().strip()
+        if not name:
+            continue
+        if name.startswith(("flat_floor", "diffusore", "venturi")):
+            floor += 1
+        elif name.startswith(NON_WING_REAR_PREFIXES):
+            continue
+        elif name.startswith("rear_"):
+            rear += 1
+        elif name.startswith(FRONT_WING_NAME_PREFIXES):
+            front += 1
+    families = [count for count in (floor, front, rear) if count]
+    if len(families) >= 2:
+        return "full_car"
+    if floor:
+        return "undertray"
+    if front:
+        return "front_wing"
+    if rear:
+        return "rear_wing"
+    return "full_car"
+
+
 def inspect_fluent_cas_zones(cas_path: str, requested_assembly: str = "undertray", config: dict = None) -> dict:
     """
     Scansiona le tabelle delle zone (sezioni 39 e 45) nel file .cas di ANSYS Fluent.
@@ -258,20 +299,7 @@ def inspect_fluent_cas_zones(cas_path: str, requested_assembly: str = "undertray
         for asm in ("undertray", "front_wing", "rear_wing", "full_car")
     }
 
-    has_undertray = len(assembly_zone_map["undertray"]) > 0
-    has_fw = len(assembly_zone_map["front_wing"]) > 0
-    has_rw = len(assembly_zone_map["rear_wing"]) > 0
-
-    if has_undertray and not has_fw and not has_rw:
-        detected_assembly = "undertray"
-    elif has_fw and not has_undertray and not has_rw:
-        detected_assembly = "front_wing"
-    elif has_rw and not has_undertray and not has_fw:
-        detected_assembly = "rear_wing"
-    elif has_undertray:
-        detected_assembly = "undertray"
-    else:
-        detected_assembly = "full_car"
+    detected_assembly = detect_assembly_from_names(z["name"] for z in aero_zones)
 
     eff_asm = detected_assembly if (not requested_assembly or requested_assembly == "auto") else requested_assembly
     target_zones = assembly_zone_map.get(eff_asm, aero_zones)

@@ -52,6 +52,18 @@ def _import_tools(tools_dir):
     return design_explorer, recombination
 
 
+VALID_ASSEMBLIES = ("auto", "undertray", "front_wing", "rear_wing", "full_car")
+
+
+def assembly_for(case, override=None):
+    """Assieme da usare: override esplicito, poi la riga del dataset, poi auto."""
+    for candidate in (override, (case or {}).get("assembly")):
+        clean = str(candidate or "").strip().lower().replace(" ", "_")
+        if clean in VALID_ASSEMBLIES:
+            return clean
+    return "auto"
+
+
 # --------------------------------------------------------------------------- dati
 def load_exclusions(data_dir):
     path = os.path.join(data_dir, EXCLUSIONS_FILE)
@@ -116,7 +128,7 @@ def case_directory(data_dir, case):
 
 # ---------------------------------------------------------------------- stadi
 def stage_geometry(data_dir, exe=None, cases_root=None, force=False, timeout=900,
-                   only=None, processor=None):
+                   only=None, processor=None, assembly_override=None):
     cases = load_cases(data_dir)
     geom_dir = os.path.join(data_dir, GEOM_DIR)
     os.makedirs(geom_dir, exist_ok=True)
@@ -146,9 +158,8 @@ def stage_geometry(data_dir, exe=None, cases_root=None, force=False, timeout=900
                 failed += 1
                 continue
         else:
-            command = [exe, "--geometry-only", "-w", directory]
-            if case.get("assembly"):
-                command.extend(["--assembly", case["assembly"]])
+            command = [exe, "--geometry-only", "-w", directory,
+                       "--assembly", assembly_for(case, assembly_override)]
             try:
                 result = subprocess.run(command, capture_output=True, text=True,
                                         errors="replace", timeout=timeout)
@@ -254,7 +265,7 @@ def _collect_case_outputs(target_dir, case, case_dir=None):
 
 
 def stage_process(data_dir, exe=None, cases_root=None, force=False, no_meta=False,
-                  only=None, timeout=3600, processor=None):
+                  only=None, timeout=3600, processor=None, assembly_override=None):
     """
     Corsa COMPLETA dell'app per ogni caso: mesh, forze, immagini, META,
     report HTML (e PDF/xlsx), AI Vision se configurata. Gli output vengono
@@ -293,9 +304,8 @@ def stage_process(data_dir, exe=None, cases_root=None, force=False, no_meta=Fals
                 failed += 1
                 continue
         else:
-            command = [exe, "-w", directory]
-            if case.get("assembly"):
-                command.extend(["--assembly", case["assembly"]])
+            command = [exe, "-w", directory,
+                       "--assembly", assembly_for(case, assembly_override)]
             if no_meta:
                 command.append("--no-meta-batch")
             try:
@@ -673,6 +683,8 @@ def main():
     parser.add_argument("--no-meta", action="store_true",
                         help="salta il rendering META nel report completo (piu' veloce)")
     parser.add_argument("--only", default=None, help="solo questi casi (separati da virgola)")
+    parser.add_argument("--assembly", default=None,
+                        help="assieme forzato su tutti i casi (auto/undertray/front_wing/rear_wing/full_car)")
     args = parser.parse_args()
 
     data_dir = os.path.abspath(args.data)
@@ -692,12 +704,14 @@ def main():
     if run_all and not args.skip_process:
         print("\n[1/4] report completi per ogni caso")
         _total, failed = stage_process(data_dir, exe, args.cases_root, args.force,
-                                       args.no_meta, only, timeout=3600)
+                                       args.no_meta, only, timeout=3600,
+                                       assembly_override=args.assembly)
         failures += failed
     if args.stage == "process":
         print("\n[1/4] report completi per ogni caso")
         _total, failed = stage_process(data_dir, exe, args.cases_root, args.force,
-                                       args.no_meta, only, timeout=3600)
+                                       args.no_meta, only, timeout=3600,
+                                       assembly_override=args.assembly)
         failures += failed
         print("\nFatto. Apri: %s" % os.path.join(data_dir, SUITE_HTML))
         return 0 if failures == 0 else 3
@@ -707,7 +721,8 @@ def main():
             print("  eseguibile non trovato: %s" % exe)
             failures += 1
         else:
-            _total, failed = stage_geometry(data_dir, exe, args.cases_root, args.force)
+            _total, failed = stage_geometry(data_dir, exe, args.cases_root, args.force,
+                                            assembly_override=args.assembly)
             failures += failed
     if args.stage in ("tables", "all"):
         print("\n[3/4] tabelle")

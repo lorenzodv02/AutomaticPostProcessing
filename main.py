@@ -141,7 +141,7 @@ def _run_geometry_only(cfg: dict, args) -> int:
 
     workspace = args.workspace or (cfg.get("project") or {}).get("workspace_dir") or os.getcwd()
     try:
-        result = geometry_for_workspace(cfg, workspace, args.assembly)
+        result = geometry_for_workspace(cfg, workspace, args.assembly or "auto")
     except FileNotFoundError as exc:
         print("[GEOMETRIA] %s" % exc)
         return 2
