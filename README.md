@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.9.2-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.9.3-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.9.2
+python main.py --version      # FS-MetaPostDiag 1.9.3
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,10 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.9.3 — commento del config allineato alla realtà
+
+La v1.9.2 aveva corretto la nota nel parser ma **non** il commento di `config.yaml` (errore mio: mancava il salvataggio). Ora entrambi dicono la stessa cosa, verificata sul caso reale: con la convenzione di default i numeri sono **positivi per forze dirette verso il basso**, come in un report Fluent con `Direction Vector (0 -1 0)`.
 
 ### v1.9.2 — convenzione dei segni: documentazione corretta
 

@@ -53,11 +53,14 @@ reference_values:
   # front_axle_x: 0.00
   # rear_axle_x: 1.535
   report_force_convention: "lift"
-                            # Convenzione del report forze, come in Fluent:
-                            #   "lift"      -> proiezione su +Y, deportanza NEGATIVA (default Fluent)
-                            #   "downforce" -> segno invertito, deportanza POSITIVA
-                            # Se in Fluent hai definito il report come "downforce", metti "downforce"
-                            # per avere nel report gli stessi numeri (e lo stesso segno) del setup.
+                            # Segno del report forze. VERIFICATO su un caso reale confrontando
+                            # con il report "Forces" di Fluent:
+                            #   "lift"      -> numeri POSITIVI quando la forza e' diretta verso il
+                            #                  basso: e' quello che si legge in un report Fluent con
+                            #                  Direction Vector (0 -1 0). Default, da usare cosi'.
+                            #   "downforce" -> segno invertito (numeri negativi per la deportanza).
+                            # Cambia questo valore SOLO se il tuo report Fluent usa la direzione
+                            # opposta (0 1 0) e vuoi ritrovare gli stessi segni.
 
 # Configurazione BETA CAE META Post
 meta:
