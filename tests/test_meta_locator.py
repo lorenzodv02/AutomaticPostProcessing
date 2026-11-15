@@ -86,3 +86,53 @@ def test_describe_meta_labels():
         assert "non trovato" in missing["label"]
     finally:
         shutil.rmtree(root, ignore_errors=True)
+
+def test_env_roots_include_fixed_drives(monkeypatch=None):
+    """Un'installazione scelta su un altro disco deve essere trovata."""
+    import meta_locator as ml
+
+    fake_drive = tempfile.mkdtemp(prefix="meta_drive_")
+    try:
+        _touch(os.path.join(fake_drive, "BETA_CAE_Systems", "meta_post_v25.1.0", "meta_post64.bat"))
+        original = ml._fixed_drives
+        ml._fixed_drives = lambda: [fake_drive]
+        try:
+            roots = ml._env_roots()
+            assert any(os.path.normcase(r).startswith(os.path.normcase(fake_drive)) for r in roots), roots
+            found = ml.find_meta_executable("auto", roots=roots)
+            assert version_of(found) == "25.1.0", found
+        finally:
+            ml._fixed_drives = original
+    finally:
+        shutil.rmtree(fake_drive, ignore_errors=True)
+
+
+def test_no_personal_paths_in_sources():
+    """
+    La ricerca di META (e in generale il codice) non deve contenere percorsi
+    della macchina di sviluppo: deve funzionare su qualunque PC.
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    offenders = []
+    for folder, _dirs, files in os.walk(repo_root):
+        if any(part in folder for part in (".git", "build", "dist", "__pycache__", "output_diagnostics")):
+            continue
+        for name in files:
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(folder, name)
+            try:
+                with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+                    text = handle.read()
+            except OSError:
+                continue
+            # marcatori composti: cosi' questo file non si auto-rileva
+            separators = [chr(92), "/"]
+            for dirsep in separators:
+                marker = "C:" + dirsep + "Users" + dirsep
+                if marker in text:
+                    offenders.append((os.path.relpath(path, repo_root), marker))
+            unix_marker = "/" + "Users" + "/"
+            if unix_marker in text and path != os.path.abspath(__file__):
+                offenders.append((os.path.relpath(path, repo_root), unix_marker))
+    assert not offenders, offenders

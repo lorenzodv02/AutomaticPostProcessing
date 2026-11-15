@@ -24,9 +24,44 @@ EXECUTABLES = ("meta_post64.exe", "meta_post.exe")
 
 _VERSION_RE = re.compile(r"v?(\d+)\.(\d+)(?:\.(\d+))?")
 
+# GetDriveTypeW: solo i dischi fissi (niente rete o rimovibili scollegati)
+DRIVE_FIXED = 3
+
+
+def _fixed_drives():
+    """
+    Lettere dei dischi **fissi** (es. ["C:\\", "D:\\"]).
+
+    Serve a trovare installazioni in cartelle scelte dall'utente su un altro
+    disco. Si interrogano solo i dischi fissi: niente attese su unita' di rete o
+    rimovibili scollegate.
+    """
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        bitmask = kernel32.GetLogicalDrives()
+        drives = []
+        for index in range(26):
+            if not bitmask & (1 << index):
+                continue
+            root = chr(ord("A") + index) + ":\\"
+            # GetDriveTypeW: 2 = DRIVE_REMOVABLE, 3 = DRIVE_FIXED, 4 = DRIVE_REMOTE
+            if kernel32.GetDriveTypeW(ctypes.c_wchar_p(root)) == DRIVE_FIXED:
+                drives.append(root)
+        return drives
+    except Exception:
+        return []
+
 
 def _env_roots():
-    """Percorsi standard in cui BETA CAE installa le sue applicazioni."""
+    """
+    Percorsi in cui BETA CAE puo' aver installato le sue applicazioni.
+
+    Derivati dalle variabili d'ambiente della macchina (nessun percorso scritto a
+    mano), piu' la cartella standard su ogni disco **fisso**: cosi' funziona su un
+    PC qualsiasi, non solo su quello di sviluppo.
+    """
     roots = []
     local = os.environ.get("LOCALAPPDATA")
     if local:
@@ -36,7 +71,8 @@ def _env_roots():
         base = os.environ.get(env)
         if base:
             roots.append(os.path.join(base, "BETA_CAE_Systems"))
-    roots.extend((r"C:\BETA_CAE_Systems", r"D:\BETA_CAE_Systems", r"E:\BETA_CAE_Systems"))
+    for drive in _fixed_drives():
+        roots.append(os.path.join(drive, "BETA_CAE_Systems"))
     # dedup preservando l'ordine
     return [root for root in dict.fromkeys(roots) if root and os.path.isdir(root)]
 

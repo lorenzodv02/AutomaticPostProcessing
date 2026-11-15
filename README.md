@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.4.1-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.4.0
+python main.py --version      # FS-MetaPostDiag 1.4.1
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,13 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.4.1 — ricerca di META Post su qualunque PC
+
+- La ricerca dell'eseguibile **non contiene percorsi fissi** della macchina di sviluppo: deriva tutto da `%LOCALAPPDATA%`, `%ProgramFiles%`, `%ProgramFiles(x86)%`, `%PROGRAMDATA%` e dalle lettere dei **dischi fissi** (via `GetLogicalDrives`, solo `DRIVE_FIXED` per non attendere unità di rete).
+- Ordine di risoluzione: percorso esplicito in `config.yaml` → variabili `META_POST_EXE`/`BETA_META_PATH` → scansione (versione più alta, launcher `.bat` preferito).
+- Se META non c'è, la pipeline continua con le immagini Python e la GUI mostra `N/D`.
+- Nuovo test di **guardia** che fallisce se nel codice compare un percorso personale (`C:\Users\...`, `/Users/...`).
 
 ### v1.4.0 — convenzione delle forze, META Post riconosciuto, questioni aperte chiuse
 
