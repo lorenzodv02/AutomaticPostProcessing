@@ -1,6 +1,8 @@
 FS-MetaPostDiag - estrazione in blocco
 =====================================
 
+Tutorial completo: TUTORIAL.md (nella stessa cartella)
+
 Cosa fa
 -------
 Trova da sola tutte le cartelle che contengono un .cas e un .dat sotto una

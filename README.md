@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.11.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.11.2-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.11.1
+python main.py --version      # FS-MetaPostDiag 1.11.2
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,11 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.11.2 — tutorial d'uso e filtro dei casi
+
+- `batch/TUTORIAL.md`: guida completa in cinque parti (singolo caso dalla GUI, estrazione in blocco passo per passo, lettura di `dataset.csv` e `_controlli.txt`, problemi comuni con rimedi, riferimento rapido dei comandi).
+- `--case-filter "Venturi"`: elabora solo i casi il cui id o percorso contiene la stringa; il dry-run mostra anche quanti casi sono esclusi dal filtro.
 
 ### v1.11.1 — estrazione in blocco: si tengono solo le iterazioni
 

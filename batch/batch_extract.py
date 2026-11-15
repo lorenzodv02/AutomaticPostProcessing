@@ -245,6 +245,9 @@ def main() -> int:
     parser.add_argument("--include-all", action="store_true",
                         help="non scartare le cartelle senza 'iterazioni' nel nome "
                              "(esegue tutti i .cas/.dat presenti)")
+    parser.add_argument("--case-filter", default=None,
+                        help="elabora solo i casi il cui id o percorso contiene questa "
+                             "stringa (senza distinzione maiuscole/minuscole)")
     args = parser.parse_args()
 
     if sys.version_info < (3, 8):
@@ -312,9 +315,24 @@ def main() -> int:
 
     to_run = [row for row in plan if row["choice"]["stato"] != "SCARTATO"]
     skipped = [row for row in plan if row["choice"]["stato"] == "SCARTATO"]
+    excluded = []
+
+    if args.case_filter:
+        needle = args.case_filter.strip().lower()
+        before = len(to_run)
+        keep = [row for row in to_run
+                if needle in row["case_id"].lower() or needle in row["relpath"].lower()]
+        excluded = [row for row in to_run if row not in keep]
+        to_run = keep
+        print("Filtro casi: '%s' -> %d di %d casi da elaborare" % (args.case_filter, len(to_run), before))
+        if not to_run:
+            print("Nessun caso corrisponde a --case-filter '%s'." % args.case_filter)
+            return 0
     print("Da elaborare: %d | scartate (solo file di partenza): %d" % (len(to_run), len(skipped)))
+    if excluded:
+        print("Escluse dal filtro: %d" % len(excluded))
     print("")
-    for row in plan:
+    for row in to_run + skipped:
         choice = row["choice"]
         if choice["stato"] == "SCARTATO":
             print("  SCARTATO  %-42s  %s" % (row["case_id"][:42], choice["motivo"]))
