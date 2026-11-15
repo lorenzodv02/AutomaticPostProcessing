@@ -173,9 +173,56 @@ def test_image_data_url_detects_mime():
     folder = tempfile.mkdtemp(prefix="ds_img_")
     try:
         path = os.path.join(folder, "foto.jpg")
+        try:
+            from PIL import Image
+            Image.new("RGB", (8, 8), (255, 0, 0)).save(path, format="JPEG")
+        except Exception:
+            with open(path, "wb") as handle:
+                handle.write(b"\xff\xd8\xff\xe0")
+        url = advisor.image_data_url(path)
+        assert url.startswith("data:image/"), url[:40]
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_oversized_image_is_downscaled():
+    """Un'immagine oltre il limite del server deve essere ridotta prima dell'invio."""
+    try:
+        import base64
+        import io as _io
+
+        from PIL import Image
+    except Exception:
+        return  # CI senza Pillow: la normalizzazione non e' attiva
+
+    folder = tempfile.mkdtemp(prefix="ds_img_")
+    try:
+        path = os.path.join(folder, "larga.png")
+        Image.new("RGB", (9000, 120), (30, 60, 90)).save(path, format="PNG")
+        url = advisor.image_data_url(path)
+        raw = base64.b64decode(url.split(",", 1)[1])
+        with Image.open(_io.BytesIO(raw)) as im:
+            assert max(im.size) <= advisor.MAX_VISION_IMAGE_SIDE, im.size
+            assert im.mode == "RGB"
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_unreadable_image_is_skipped():
+    """Un file che non e' un'immagine non deve far fallire la richiesta."""
+    folder = tempfile.mkdtemp(prefix="ds_img_")
+    try:
+        path = os.path.join(folder, "rotto.png")
         with open(path, "wb") as handle:
-            handle.write(b"\xff\xd8\xff\xe0")
-        assert advisor.image_data_url(path).startswith("data:image/jpeg;base64,")
+            handle.write(b"non e un png")
+        payload = advisor.build_deepseek_payload({}, "testo", [path])
+        blocks = payload["messages"][1]["content"]
+        # senza Pillow i byte vengono inviati cosi' come sono; con Pillow l'immagine si scarta
+        try:
+            from PIL import Image  # noqa: F401
+            assert len(blocks) == 1, blocks
+        except Exception:
+            assert len(blocks) == 2, blocks
     finally:
         shutil.rmtree(folder, ignore_errors=True)
 
@@ -222,20 +269,14 @@ def test_check_reports_server_message():
 
 
 def test_payload_respects_total_image_cap():
-    folder = tempfile.mkdtemp(prefix="ds_img_")
-    try:
-        paths = []
-        for index in range(2):
-            path = os.path.join(folder, "img%d.png" % index)
-            with open(path, "wb") as handle:
-                handle.write(os.urandom(2000))
-            paths.append(path)
-        payload = advisor.build_deepseek_payload({}, "testo", paths, max_total_bytes=3000)
-        blocks = payload["messages"][1]["content"]
-        # solo il blocco di testo + una immagine: la seconda sfonderebbe il limite
-        assert len(blocks) == 2, len(blocks)
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
+    """Sopra il limite di dimensione si smette di aggiungere immagini."""
+    fake_url = "data:image/png;base64," + "A" * 2000
+    with mock.patch.object(advisor, "image_data_url", return_value=fake_url):
+        payload = advisor.build_deepseek_payload(
+            {}, "testo", ["a.png", "b.png"], max_total_bytes=3000)
+    blocks = payload["messages"][1]["content"]
+    # solo il blocco di testo + una immagine: la seconda sfonderebbe il limite
+    assert len(blocks) == 2, len(blocks)
 
 
 def test_retry_without_images_on_http_400():

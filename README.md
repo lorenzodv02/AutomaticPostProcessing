@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.8.2-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.8.3-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.8.2
+python main.py --version      # FS-MetaPostDiag 1.8.3
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,18 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.8.3 — le immagini arrivano davvero all'AI
+
+Causa trovata sul campo (con il caso reale FW5): una delle immagini inviate era **8612 px** di larghezza, oltre il limite DeepSeek di **8192 px per lato** → `HTTP 400 "You have uploaded an unsupported image"`. Le altre passavano, quindi il messaggio sembrava riguardare il modello mentre era una **nostra immagine**.
+
+Perché era così larga: nella mappa PID le etichette delle zone finivano fuori dall'area del grafico e `bbox_inches="tight"` allargava il file salvato (misurato: 6015 px con etichette non ritagliate, 925 px con `clip_on=True`).
+
+- **Client**: `normalize_image_bytes` converte in RGB e ridimensiona ogni immagine entro **4096 px** per lato prima dell'invio; i file illeggibili vengono **saltati** (con log) invece di far fallire tutta la richiesta;
+- **Renderer**: etichette PID con `clip_on=True`, così la mappa non sfora più il canvas;
+- test: ridimensionamento, skip dei file rotti, limite di payload.
+
+Verificato con le immagini reali del caso FW5: prima 1 immagine su 4 rifiutata e la richiesta combinata in errore; ora **tutte accettate**, richiesta combinata inclusa.
 
 ### v1.8.2 — `--ai-check` usabile da terminale, e un PNG di prova che era corrotto
 

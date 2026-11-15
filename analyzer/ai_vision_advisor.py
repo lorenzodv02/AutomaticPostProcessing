@@ -7,6 +7,7 @@ e sulle immagini verificate.
 """
 
 import base64
+import io
 import json
 import os
 import urllib.error
@@ -49,6 +50,12 @@ def _tiny_png_bytes() -> bytes:
 # PNG 1x1 usato dalla prova vision di `deepseek_check`.
 _TINY_PNG_B64 = base64.b64encode(_tiny_png_bytes()).decode("ascii")
 
+# Limite di sicurezza per lato delle immagini inviate all'AI.
+# DeepSeek rifiuta con HTTP 400 sopra 8192 px per lato (e 4096 se la richiesta
+# contiene 15+ immagini): alcune nostre viste possono sforare, quindi si
+# ridimensionano prima dell'invio.
+MAX_VISION_IMAGE_SIDE = 4096
+
 _IMAGE_MIME = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -84,12 +91,44 @@ def _read_http_error(exc) -> str:
     return " ".join(raw.split())[:300]
 
 
+def normalize_image_bytes(path: str):
+    """
+    Byte e MIME di un'immagine pronta per l'invio all'AI.
+
+    Se Pillow è disponibile: si converte in RGB e si riduce entro
+    `MAX_VISION_IMAGE_SIDE` per lato (il server rifiuta le immagini troppo
+    grandi con "unsupported image"). Solleva se il file non è un'immagine
+    leggibile: il chiamante lo salta invece di far fallire tutta la richiesta.
+    """
+    try:
+        from PIL import Image
+    except Exception:
+        # Senza Pillow si inviano i byte originali con il MIME dedotto.
+        mime = _IMAGE_MIME.get(os.path.splitext(str(path))[1].lower(), "image/png")
+        with open(path, "rb") as handle:
+            return handle.read(), mime
+
+    with Image.open(path) as image:
+        image.load()
+        if image.mode not in ("RGB", "L"):
+            image = image.convert("RGB")
+        width, height = image.size
+        longest = max(width, height)
+        if longest > MAX_VISION_IMAGE_SIDE:
+            scale = MAX_VISION_IMAGE_SIDE / float(longest)
+            image = image.resize(
+                (max(1, int(round(width * scale))), max(1, int(round(height * scale)))),
+                Image.LANCZOS,
+            )
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        return buffer.getvalue(), "image/png"
+
+
 def image_data_url(path: str) -> str:
     """Immagine locale come data-URL base64 (formato richiesto da DeepSeek/OpenAI)."""
-    mime = _IMAGE_MIME.get(os.path.splitext(str(path))[1].lower(), "image/png")
-    with open(path, "rb") as handle:
-        encoded = base64.b64encode(handle.read()).decode("ascii")
-    return "data:%s;base64,%s" % (mime, encoded)
+    data, mime = normalize_image_bytes(path)
+    return "data:%s;base64,%s" % (mime, base64.b64encode(data).decode("ascii"))
 
 
 def build_deepseek_payload(ai_cfg: dict, prompt: str, image_paths,
@@ -105,8 +144,17 @@ def build_deepseek_payload(ai_cfg: dict, prompt: str, image_paths,
     blocks = [{"type": "text", "text": prompt}]
     total = 0
     skipped = 0
+    unreadable = 0
     for path in image_paths or []:
-        url = image_data_url(path)
+        try:
+            url = image_data_url(path)
+        except Exception as exc:
+            # Un file illeggibile farebbe fallire tutta la richiesta (HTTP 400):
+            # meglio una perizia con le immagini buone che nessuna.
+            unreadable += 1
+            print("[INFO] DeepSeek: immagine scartata (%s): %s"
+                  % (os.path.basename(str(path)), _short_error(exc)))
+            continue
         # DeepSeek rifiuta (HTTP 400) le richieste oltre 48 MiB: restiamo larghi
         # e scartiamo le immagini in eccesso invece di far fallire tutto.
         if total + len(url) > max_total_bytes:
@@ -116,6 +164,8 @@ def build_deepseek_payload(ai_cfg: dict, prompt: str, image_paths,
         blocks.append({"type": "image_url", "image_url": {"url": url}})
     if skipped:
         print("[INFO] DeepSeek: %d immagini escluse per non superare il limite di richiesta." % skipped)
+    if unreadable:
+        print("[INFO] DeepSeek: %d immagini illeggibili non inviate." % unreadable)
 
     effort = str(ai_cfg.get("deepseek_reasoning_effort", "high") or "high").strip().lower()
     if effort not in DEEPSEEK_EFFORTS:

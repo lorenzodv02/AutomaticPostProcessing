@@ -554,7 +554,7 @@ def _render_real_unpacked_mesh_views(
             ax.plot(cx, cz, "o", color="white", markersize=6, markeredgecolor="black")
             ax.text(
                 cx, cz, f" {pl['zone_name']}",
-                fontsize=8.5, fontweight="bold", color="#0f172a",
+                fontsize=8.5, fontweight="bold", color="#0f172a", clip_on=True,
                 bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="#334155", alpha=0.85)
             )
         _style_real_mesh_ax(
