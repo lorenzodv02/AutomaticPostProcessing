@@ -174,6 +174,10 @@ def main():
         default=None,
         help="Modello AI Vision Advisor (default: dal config.yaml, es. gemini-3.8-flash)",
     )
+    parser.add_argument(
+        "--ai-check", action="store_true",
+        help="Verifica la configurazione AI Vision (chiave, modelli disponibili, chiamata minima) ed esce",
+    )
     parser.add_argument("--gui", action="store_true", help="Avvia l'interfaccia grafica desktop")
     parser.add_argument("--open-report", action="store_true", help="Apre automaticamente il report HTML nel browser")
 
@@ -196,6 +200,37 @@ def main():
             "deepseek": "model_deepseek",
         }.get(provider, "model_gemini")
         cfg.setdefault("ai_vision", {})[model_key] = args.ai_model
+
+    if args.ai_check:
+        from analyzer.ai_vision_advisor import deepseek_check
+
+        ai_cfg = cfg.get("ai_vision", {})
+        provider = str(ai_cfg.get("provider", "gemini") or "").strip().lower()
+        print("[AI-CHECK] provider: %s" % provider)
+        if provider != "deepseek":
+            print("[AI-CHECK] il controllo dettagliato copre il provider 'deepseek'. "
+                  "Per '%s' servono chiave e modello nel config." % provider)
+        info = deepseek_check(ai_cfg)
+        print("[AI-CHECK] endpoint: %s" % info["base_url"])
+        print("[AI-CHECK] modello richiesto: %s" % info["model"])
+        print("[AI-CHECK] chiave: %s" % ("presente (" + info["key_masked"] + ")" if info["key_present"] else "ASSENTE"))
+        if info["models_error"]:
+            print("[AI-CHECK] errore su GET /models -> %s" % info["models_error"])
+        elif info["models"]:
+            print("[AI-CHECK] modelli disponibili per questa chiave: %s" % ", ".join(info["models"]))
+            if info["model_available"] is False:
+                print("[AI-CHECK] ATTENZIONE: '%s' NON e' tra i modelli disponibili: usa uno degli id elencati."
+                      % info["model"])
+        else:
+            print("[AI-CHECK] GET /models non ha restituito modelli.")
+        if info["thinking_call"]:
+            print("[AI-CHECK] chiamata con thinking: %s" % info["thinking_call"])
+        if info["text_call"]:
+            print("[AI-CHECK] chiamata senza thinking: %s" % info["text_call"])
+        if info["models_error"] or (info["thinking_call"] and not info["thinking_call"].startswith("ok")):
+            print("[AI-CHECK] suggerimenti: verifica che la chiave sia di platform.deepseek.com, "
+                  "che il modello sia tra quelli elencati e che l'account abbia credito.")
+        return 0
 
     if args.gui or _launch_gui_by_default(len(sys.argv)):
         from gui_app import launch_gui

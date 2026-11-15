@@ -49,6 +49,15 @@ def _short_error(exc) -> str:
     return text[:140]
 
 
+def _read_http_error(exc) -> str:
+    """Corpo della risposta d'errore (contiene il motivo vero del rifiuto)."""
+    try:
+        raw = exc.read().decode("utf-8", "ignore")
+    except Exception:
+        return ""
+    return " ".join(raw.split())[:300]
+
+
 def image_data_url(path: str) -> str:
     """Immagine locale come data-URL base64 (formato richiesto da DeepSeek/OpenAI)."""
     mime = _IMAGE_MIME.get(os.path.splitext(str(path))[1].lower(), "image/png")
@@ -57,7 +66,8 @@ def image_data_url(path: str) -> str:
     return "data:%s;base64,%s" % (mime, encoded)
 
 
-def build_deepseek_payload(ai_cfg: dict, prompt: str, image_paths) -> dict:
+def build_deepseek_payload(ai_cfg: dict, prompt: str, image_paths,
+                           max_total_bytes: int = 24 * 1024 * 1024) -> dict:
     """
     Body della richiesta DeepSeek: testo + immagini + thinking mode.
 
@@ -67,8 +77,19 @@ def build_deepseek_payload(ai_cfg: dict, prompt: str, image_paths) -> dict:
     sono ignorate, quindi non vengono inviate.
     """
     blocks = [{"type": "text", "text": prompt}]
+    total = 0
+    skipped = 0
     for path in image_paths or []:
-        blocks.append({"type": "image_url", "image_url": {"url": image_data_url(path)}})
+        url = image_data_url(path)
+        # DeepSeek rifiuta (HTTP 400) le richieste oltre 48 MiB: restiamo larghi
+        # e scartiamo le immagini in eccesso invece di far fallire tutto.
+        if total + len(url) > max_total_bytes:
+            skipped += 1
+            continue
+        total += len(url)
+        blocks.append({"type": "image_url", "image_url": {"url": url}})
+    if skipped:
+        print("[INFO] DeepSeek: %d immagini escluse per non superare il limite di richiesta." % skipped)
 
     effort = str(ai_cfg.get("deepseek_reasoning_effort", "high") or "high").strip().lower()
     if effort not in DEEPSEEK_EFFORTS:
@@ -125,6 +146,64 @@ def deepseek_available_models(api_key: str) -> list:
         return [str(item.get("id")) for item in (payload.get("data") or []) if item.get("id")]
     except Exception:
         return []
+
+
+def deepseek_check(ai_cfg: dict) -> dict:
+    """
+    Diagnostica della configurazione DeepSeek: chiave, modelli, chiamata minima.
+
+    Serve a rispondere a "perche' HTTP 400?": riporta l'elenco dei modelli
+    disponibili per la chiave e il messaggio esatto del server, sia con thinking
+    attivo sia senza (per capire se e' il payload o il modello).
+    """
+    key = str(ai_cfg.get("api_key") or os.environ.get("DEEPSEEK_API_KEY") or "").strip()
+    model = str(ai_cfg.get("model_deepseek") or DEEPSEEK_DEFAULT_MODEL)
+    info = {
+        "base_url": DEEPSEEK_BASE_URL,
+        "model": model,
+        "key_present": bool(key),
+        "key_masked": (key[:4] + "…" + key[-4:]) if len(key) > 8 else ("***" if key else ""),
+        "models": [],
+        "models_error": "",
+        "model_available": None,
+        "text_call": "",
+        "thinking_call": "",
+    }
+    if not key:
+        return info
+
+    try:
+        payload = _deepseek_http("GET", "/models", key, None, timeout=20)
+        info["models"] = [str(item.get("id")) for item in (payload.get("data") or []) if item.get("id")]
+        info["model_available"] = model in info["models"] if info["models"] else None
+    except urllib.error.HTTPError as exc:
+        info["models_error"] = "HTTP %s: %s" % (exc.code, _read_http_error(exc))
+    except Exception as exc:
+        info["models_error"] = "%s: %s" % (type(exc).__name__, _short_error(exc))
+    if info["models_error"]:
+        return info
+
+    base_body = {
+        "model": model,
+        "messages": [{"role": "user", "content": "Rispondi solo con: OK"}],
+        "stream": False,
+    }
+    for label, extra in (
+        ("thinking_call", {"thinking": {"type": "enabled"}, "reasoning_effort": "high"}),
+        ("text_call", {"thinking": {"type": "disabled"}}),
+    ):
+        body = dict(base_body)
+        body.update(extra)
+        try:
+            answer = _deepseek_http("POST", "/chat/completions", key, body, timeout=90)
+            text, _reasoning = extract_deepseek_answer(answer)
+            info[label] = "ok" + (" (content: %s)" % text[:40] if text else " (senza testo)")
+            break
+        except urllib.error.HTTPError as exc:
+            info[label] = "HTTP %s: %s" % (exc.code, _read_http_error(exc))
+        except Exception as exc:
+            info[label] = "%s: %s" % (type(exc).__name__, _short_error(exc))
+    return info
 
 
 def deepseek_ask(api_key: str, payload: dict) -> dict:
@@ -321,15 +400,31 @@ def generate_ai_vision_commentary(
             # Fonte: api-docs.deepseek.com (chat completions compatibile OpenAI,
             # vision con image_url data-URL, thinking mode con reasoning_effort).
             payload = None
+            degraded_text_only = False
             try:
                 payload = build_deepseek_payload(ai_cfg, user_context, selected_image_paths[:4])
-                body = deepseek_ask(api_key, payload)
+                try:
+                    body = deepseek_ask(api_key, payload)
+                except urllib.error.HTTPError as exc:
+                    # Se il rifiuto riguarda le immagini (o il payload in generale),
+                    # riprova una volta senza immagini: meglio una perizia solo testo
+                    # che nessuna perizia.
+                    has_images = len(payload["messages"][1]["content"]) > 1
+                    if exc.code != 400 or not has_images:
+                        raise
+                    print("[INFO] DeepSeek ha rifiutato la richiesta con immagini (HTTP 400): "
+                          "riprovo senza immagini.")
+                    payload = build_deepseek_payload(ai_cfg, user_context, [])
+                    body = deepseek_ask(api_key, payload)
+                    degraded_text_only = True
                 text, reasoning = extract_deepseek_answer(body)
                 if text:
                     effort = payload.get("reasoning_effort")
                     label = payload["model"]
                     if effort:
                         label += ", thinking " + str(effort)
+                    if degraded_text_only:
+                        label += ", solo testo (immagini rifiutate)"
                     if reasoning:
                         print("[INFO] DeepSeek thinking: %d caratteri di ragionamento." % len(reasoning))
                     return {
@@ -351,7 +446,12 @@ def generate_ai_vision_commentary(
                     if models:
                         hint = " Modelli disponibili: " + ", ".join(models[:8]) + "."
                 model = (payload or {}).get("model", DEEPSEEK_DEFAULT_MODEL)
-                local_reason = "DeepSeek ha risposto HTTP %s (modello '%s')." % (exc.code, model)
+                local_reason = "DeepSeek ha risposto HTTP %s (modello '%s')" % (exc.code, model)
+                server_detail = " ".join(detail.split())
+                if server_detail:
+                    local_reason += ": " + server_detail
+                else:
+                    local_reason += ": nessun dettaglio dal server."
                 print(f"[INFO] DeepSeek API non completata (HTTP {exc.code}, modello '{model}').{hint} "
                       f"Dettaglio: {detail}")
             except Exception as exc:

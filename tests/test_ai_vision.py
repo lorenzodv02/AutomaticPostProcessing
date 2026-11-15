@@ -186,3 +186,70 @@ def test_disabled_ai_reports_reason():
     )
     assert result["ai_status"]["mode"] == "local"
     assert "disattivata" in result["ai_status"]["reason"], result["ai_status"]
+
+def _http_error(status, body):
+    return urllib.error.HTTPError(
+        "https://api.deepseek.com/chat/completions", status, "Error", {}, io.BytesIO(body)
+    )
+
+
+def test_check_without_key_stops_immediately():
+    info = advisor.deepseek_check({"model_deepseek": "deepseek-flash", "api_key": ""})
+    assert info["key_present"] is False
+    assert info["models"] == []
+    assert info["models_error"] == ""
+
+
+def test_check_flags_model_not_in_account_list():
+    def fake_http(method, path, key, body=None, timeout=120):
+        if method == "GET":
+            return {"data": [{"id": "deepseek-chat"}, {"id": "deepseek-reasoner"}]}
+        return {"choices": [{"message": {"content": "OK"}}]}
+
+    with mock.patch.object(advisor, "_deepseek_http", side_effect=fake_http):
+        info = advisor.deepseek_check({"model_deepseek": "deepseek-flash", "api_key": "k" * 12})
+    assert info["models"] == ["deepseek-chat", "deepseek-reasoner"]
+    assert info["model_available"] is False
+    assert info["thinking_call"].startswith("ok")
+
+
+def test_check_reports_server_message():
+    error = _http_error(400, b'{"error":{"message":"Model Not Exist"}}')
+    with mock.patch.object(advisor, "_deepseek_http", side_effect=error):
+        info = advisor.deepseek_check({"model_deepseek": "deepseek-flash", "api_key": "k" * 12})
+    assert "HTTP 400" in info["models_error"]
+    assert "Model Not Exist" in info["models_error"]
+
+
+def test_payload_respects_total_image_cap():
+    folder = tempfile.mkdtemp(prefix="ds_img_")
+    try:
+        paths = []
+        for index in range(2):
+            path = os.path.join(folder, "img%d.png" % index)
+            with open(path, "wb") as handle:
+                handle.write(os.urandom(2000))
+            paths.append(path)
+        payload = advisor.build_deepseek_payload({}, "testo", paths, max_total_bytes=3000)
+        blocks = payload["messages"][1]["content"]
+        # solo il blocco di testo + una immagine: la seconda sfonderebbe il limite
+        assert len(blocks) == 2, len(blocks)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_retry_without_images_on_http_400():
+    folder = tempfile.mkdtemp(prefix="ds_img_")
+    try:
+        image = _png(folder)
+        ok_body = {"choices": [{"message": {"content": "perizia solo testo"}}]}
+        error = _http_error(400, b'{"error":{"message":"invalid image"}}')
+        cv = {"annotated_images": [{"annotated_path": image}]}
+        with mock.patch.object(advisor, "deepseek_ask", side_effect=[error, ok_body]) as called:
+            result = advisor.generate_ai_vision_commentary(_config(), _session(), cv, [], [])
+        assert called.call_count == 2
+        assert "solo testo" in result["source"]
+        assert result["commentary_markdown"] == "perizia solo testo"
+        assert result["ai_status"]["mode"] == "ai"
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)

@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.6.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.7.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.6.1
+python main.py --version      # FS-MetaPostDiag 1.7.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,28 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.7.0 — diagnosi dell'AI Vision e richieste più robuste
+
+Un `HTTP 400` di DeepSeek non diceva *cosa* fosse sbagliato: ora si legge tutto.
+
+- **`--ai-check`**: comando che verifica chiave, elenco modelli e una chiamata minima, ed esce. Mostra il messaggio esatto del server.
+  ```bash
+  FS-MetaPostDiag.exe --ai-check          # o: python main.py --ai-check
+  ```
+  Esempio reale con chiave non valida:
+  ```text
+  [AI-CHECK] chiave: presente (sk-c…test)
+  [AI-CHECK] errore su GET /models -> HTTP 401: {"error":{"message":"Authentication Fails, Your api key ... is invalid"}}
+  ```
+  Esempio con modello non disponibile per la chiave:
+  ```text
+  [AI-CHECK] modelli disponibili per questa chiave: deepseek-chat, deepseek-reasoner
+  [AI-CHECK] ATTENZIONE: 'deepseek-flash' NON e' tra i modelli disponibili: usa uno degli id elencati.
+  ```
+- **La nota del report riporta il messaggio del server**, non solo il codice HTTP (fix di una doppia lettura del corpo che lo perdeva).
+- **Retry senza immagini**: se DeepSeek rifiuta la richiesta con immagini (HTTP 400), riprova una volta in solo testo e la fonte diventa `DeepSeek Vision (..., solo testo (immagini rifiutate))`.
+- **Limite di dimensione**: le immagini vengono accodate fino a ~24 MiB di base64; le eccedenti si scartano con una riga di log, invece di far fallire la richiesta (limite DeepSeek 48 MiB).
 
 ### v1.6.1 — il report dice se (e perché) l'AI Vision non è stata usata
 
