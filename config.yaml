@@ -2,6 +2,20 @@
 # Configurazione Post-Processing CFD & Diagnostica Design (Formula Student)
 # Software: BETA CAE META Post + Python Vision & Aero Diagnostics
 # ==============================================================================
+# QUALI CHIAVI SONO DAVVERO LETTE (aggiornato dopo il refactor "config viva"):
+#   LETTE dal codice:
+#     project.workspace_dir / output_dir / assembly_type
+#     reference_values.*            -> integrali di forza e CL/CD (reference_area)
+#     meta.*                        -> esecuzione META e risoluzione immagini
+#     assemblies.<t>.pid_keywords / exclude_keywords   -> filtro PID
+#     assemblies.<t>.x_cuts_normalized / z_cuts_normalized -> sezioni disegnate
+#     assemblies.<t>.thresholds     -> severita' della diagnosi
+#     assemblies.<t>.cp_range       -> scala colore del Cp
+#     ai_vision.*                   -> commento AI opzionale
+#   SOLO DOCUMENTAZIONE (nessun codice le legge, tenute come riferimento):
+#     coordinate_system.*, fluent_variables, wheelbase
+#   RIMOSSE perche' inutilizzate: y_cuts_normalized, primary_suction_view
+# ==============================================================================
 
 project:
   name: "Formula Student CFD Aero Diagnostics"
@@ -24,7 +38,8 @@ reference_values:
   density_air: 1.225       # Densita' dell'aria [kg/m^3]
   pressure_inf: 0.0        # Pressione statica di riferimento relativa [Pa]
   viscosity_mu: 1.7894e-5  # Viscosita' dinamica [Pa*s]
-  reference_area: 1.08      # Area frontale di riferimento A [m^2] (per ricavare CL*A e CD*A)
+  reference_area: 1.08      # Area frontale di riferimento A [m^2]: usata per CL = Df/(q*A) e CD = Tr/(q*A)
+                            #   (CL*A e CD*A ne sono indipendenti, come deve essere)
   wheelbase: 1.535         # Passo vettura [m]
 
 # Configurazione BETA CAE META Post
@@ -36,7 +51,9 @@ meta:
   image_height: 1080
   background_color: "white"
 
-# Mappatura automatica dei nomi delle variabili nei file .cas/.dat di ANSYS Fluent
+# Mappatura (DOCUMENTAZIONE) dei nomi delle variabili nei file .cas/.dat di ANSYS Fluent.
+# Il parser legge i campi tramite i sub_id numerici di Fluent, non tramite il nome:
+# questa sezione serve come riferimento per chi prepara il caso in Fluent.
 fluent_variables:
   static_pressure:
     - "Pressure"
@@ -87,14 +104,19 @@ assemblies:
     display_name: "Undertray / Fondo & Diffusore (Venturi)"
     pid_keywords:
       - "undertray"
+      - "flat_floor"
       - "floor"
+      - "diffusore"
       - "diffuser"
       - "venturi"
+      - "tunnel"
+      - "channel"
       - "tray"
       - "strake"
       - "skid"
+      - "plank"
+      - "bargeboard"
       - "fondo"
-      - "tunnel"
     exclude_keywords:
       - "inlet"
       - "outlet"
@@ -104,12 +126,13 @@ assemblies:
       - "road"
       - "domain"
       - "tunnel_wall"
-    # Stazioni normalizzate (0.0 = inizio anteriore/centro, 1.0 = fine posteriore/estremita' laterale)
+    # Stazioni normalizzate (0.0 = inizio anteriore, 1.0 = fine posteriore) delle
+    # SEZIONI disegnate: una stazione > 1.0 cadrebbe fuori dal bounding box ed e'
+    # scartata automaticamente. La griglia di campionamento dei KPI resta canonica
+    # a 10 stazioni, cosi' i numeri restano confrontabili cambiando i tagli.
     x_cuts_normalized: [0.10, 0.25, 0.45, 0.65, 0.80, 0.92, 1.05]
     z_cuts_normalized: [0.02, 0.20, 0.45, 0.70, 0.90]
-    y_cuts_normalized: [0.05, 0.15, 0.30]
     cp_range: [-3.5, 1.0]
-    primary_suction_view: "bottom"   # -Y guarda verso +Y (lato inferiore aspirato)
     thresholds:
       max_acceptable_stall_pct: 8.0
       critical_stall_pct: 18.0
@@ -139,9 +162,7 @@ assemblies:
       - "domain"
     x_cuts_normalized: [0.15, 0.40, 0.65, 0.85, 1.00, 1.15, 1.35]
     z_cuts_normalized: [0.05, 0.25, 0.50, 0.75, 0.92]
-    y_cuts_normalized: [0.10, 0.30, 0.60]
     cp_range: [-4.0, 1.0]
-    primary_suction_view: "bottom"
     thresholds:
       max_acceptable_stall_pct: 6.0
       critical_stall_pct: 14.0
@@ -171,9 +192,7 @@ assemblies:
       - "domain"
     x_cuts_normalized: [0.15, 0.45, 0.75, 0.95, 1.10, 1.30]
     z_cuts_normalized: [0.05, 0.30, 0.60, 0.85, 0.95]
-    y_cuts_normalized: [0.20, 0.50, 0.80]
     cp_range: [-3.8, 1.0]
-    primary_suction_view: "bottom"
     thresholds:
       max_acceptable_stall_pct: 10.0
       critical_stall_pct: 20.0
@@ -206,9 +225,7 @@ assemblies:
       - "box"
     x_cuts_normalized: [0.10, 0.25, 0.40, 0.55, 0.70, 0.85, 0.98, 1.10]
     z_cuts_normalized: [0.02, 0.20, 0.40, 0.65, 0.85]
-    y_cuts_normalized: [0.05, 0.15, 0.35, 0.65]
     cp_range: [-3.5, 1.0]
-    primary_suction_view: "bottom"
     thresholds:
       max_acceptable_stall_pct: 10.0
       critical_stall_pct: 20.0

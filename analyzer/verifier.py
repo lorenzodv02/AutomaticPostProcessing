@@ -195,6 +195,29 @@ def verify_session_and_data(session_bundle: dict) -> dict:
         "details": "Tutte le immagini sono state controllate a livello di pixel per escludere schermate nere, vuote o sintetiche."
     })
 
+    # Check 7: coerenza aritmetica dei KPI globali (i totali devono essere la somma dei PID)
+    df_from_pids = sum(float(p.get("downforce_2x_N", 0.0)) for p in pid_breakdown)
+    df_total_kpi = float(kpis.get("downforce_total_N", kpis.get("downforce_N", 0.0)))
+    dr_from_pids = sum(float(p.get("drag_2x_N", 0.0)) for p in pid_breakdown)
+    dr_total_kpi = float(kpis.get("drag_total_N", kpis.get("drag_N", 0.0)))
+    tol_df = max(0.5, abs(df_total_kpi) * 1e-3)
+    tol_dr = max(0.5, abs(dr_total_kpi) * 1e-3)
+    df_ok = abs(df_from_pids - df_total_kpi) <= tol_df
+    dr_ok = abs(dr_from_pids - dr_total_kpi) <= tol_dr
+    checks.append({
+        "id": "CHK-07",
+        "name": "Coerenza Aritmetica dei KPI Globali (Somma dei PID)",
+        "status": "PASS" if (df_ok and dr_ok) else "WARN",
+        "measured": (
+            f"Deportanza: somma PID = {df_from_pids:.1f} N vs KPI = {df_total_kpi:.1f} N | "
+            f"Drag: somma PID = {dr_from_pids:.1f} N vs KPI = {dr_total_kpi:.1f} N"
+        ),
+        "details": (
+            "I totali del report devono coincidere con la somma dei contributi per PID "
+            f"(tolleranza {tol_df:.2f} N deportanza, {tol_dr:.2f} N drag)."
+        ),
+    })
+
     overall_passed = all(c["status"] in ("PASS", "WARN") for c in checks) and mesh_ok and pids_ok
 
     report = {

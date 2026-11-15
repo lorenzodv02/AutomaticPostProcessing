@@ -4,7 +4,13 @@ Motore di Regole Aerodinamiche Basato sui Dati Reali per Singolo PID (assembly_r
 Deriva tutte le problematiche del design esclusivamente dalle metriche reali misurate
 sui PID del file .cas/.dat (es. flat_floor, diffusore_int, venturi, venturi_first,
 venturi_second, venturi_endplate), rispettando la simmetria Half-Car (Z = 0).
+
+Le soglie non sono piu' cablate: arrivano da `config.yaml` (sezione
+`assemblies.<tipo>.thresholds`) tramite `config_bridge.thresholds`, con fallback
+ai valori storici se il file non le definisce.
 """
+
+from config_bridge import thresholds as resolve_thresholds
 
 
 def _format_pid_bbox(p: dict, fallback_bbox: dict) -> str:
@@ -24,6 +30,8 @@ def evaluate_design_issues(session_bundle: dict, cv_results: dict) -> list:
     simmetria per generare la lista verificata delle problematiche del design.
     """
     assembly_type = session_bundle.get("assembly_type", "undertray")
+    config = session_bundle.get("config") or {}
+    th = resolve_thresholds(config, assembly_type)
     bbox = session_bundle.get("bounding_box", {})
     pdata = session_bundle.get("physics_data", {})
     kpis = pdata.get("summary_kpis", {})
@@ -56,7 +64,12 @@ def evaluate_design_issues(session_bundle: dict, cv_results: dict) -> list:
         p_fy = float(worst_stall_pid["fy_N"])
         p_fx = float(worst_stall_pid["fx_N"])
         p_cp_mean = float(worst_stall_pid["cp_mean"])
-        sev = "CRITICAL" if p_stall >= 8.0 else ("WARNING" if p_stall >= 2.0 else "INFO")
+        # Soglie da config.yaml (prima erano cablate a 8.0% e 2.0%)
+        sev = (
+            "CRITICAL"
+            if p_stall >= th["critical_stall_pct"]
+            else ("WARNING" if p_stall >= th["max_acceptable_stall_pct"] else "INFO")
+        )
 
         issues.append({
             "id": f"{assembly_type[:2].upper()}-{sev[:4]}-01",
@@ -94,9 +107,10 @@ def evaluate_design_issues(session_bundle: dict, cv_results: dict) -> list:
         s_fy = float(best_suction_pid["fy_N"])
         s_area = float(best_suction_pid["area_m2"])
 
+        suction_is_critical = s_cp_min <= th["min_suction_cp_warning"]
         issues.append({
-            "id": f"{assembly_type[:2].upper()}-WARN-02",
-            "severity": "WARNING",
+            "id": f"{assembly_type[:2].upper()}-{'WARN' if suction_is_critical else 'INFO'}-02",
+            "severity": "WARNING" if suction_is_critical else "INFO",
             "title": f"Concentrazione del Picco di Depressione su '{s_name}' (PID {s_id}, Cp_min = {s_cp_min:.2f})",
             "location_xyz": _format_pid_bbox(best_suction_pid, bbox),
             "visual_evidence": (
@@ -150,9 +164,11 @@ def evaluate_design_issues(session_bundle: dict, cv_results: dict) -> list:
         })
 
     # 4. Verifica Condizione di Simmetria e Bilanciamento Globale PID
+    asymmetry_pct = float(kpis.get("lateral_asymmetry_pct", 0.0))
+    asymmetry_ok = asymmetry_pct <= th["max_asymmetry_pct"]
     issues.append({
-        "id": f"{assembly_type[:2].upper()}-INFO-04",
-        "severity": "INFO",
+        "id": f"{assembly_type[:2].upper()}-{'INFO' if asymmetry_ok else 'WARN'}-04",
+        "severity": "INFO" if asymmetry_ok else "WARNING",
         "title": (
             "Verifica Modello Half-Car Simmetrico (Z = 0) e Bilanciamento Longitudinale CoP"
             if is_sym else "Analisi Simmetria Laterale e Bilanciamento Longitudinale CoP"
@@ -179,5 +195,42 @@ def evaluate_design_issues(session_bundle: dict, cv_results: dict) -> list:
             "Qualora si vogliano investigare effetti di imbardata (yaw) o instabilità bi-stabili asimmetriche nel diffusore, eseguire una simulazione sul dominio completo (Full-Car senza piano symmetry)."
         ]
     })
+
+    # 5. Integrita' dei vortici del fondo rispetto alla soglia dell'assieme
+    vortex_score = float(kpis.get("vortex_stability_pct", 100.0))
+    core_loss = max(0.0, (100.0 - vortex_score) / 100.0)
+    if core_loss > th["vortex_core_loss_threshold"]:
+        issues.append({
+            "id": f"{assembly_type[:2].upper()}-WARN-05",
+            "severity": "WARNING",
+            "title": (
+                f"Perdita di Integrita' dei Vortici del Fondo ({core_loss * 100:.1f}% "
+                f"oltre la soglia {th['vortex_core_loss_threshold'] * 100:.0f}%)"
+            ),
+            "location_xyz": (
+                f"Ultima stazione X analizzata | X_CoP = {kpis.get('cop_x_m', 0.0):.3f} m "
+                f"({kpis.get('cop_x_pct', 50.0):.1f}% L)"
+            ),
+            "visual_evidence": (
+                "Mappa 08 (X-Cut progressive), Grafico 04 (Vortex Integrity & Wake Loss) "
+                "e GIF 10 (sweep Cp)"
+            ),
+            "root_cause": (
+                f"Il punteggio di integrita' dei vortici all'ultima stazione X e' {vortex_score:.1f}/100 "
+                f"(perdita {core_loss * 100:.1f}%, soglia {th['vortex_core_loss_threshold'] * 100:.0f}%): "
+                f"i vortici del canale Venturi arrivano al diffusore gia' degradati, quindi la depressione "
+                f"sotto il fondo non viene recuperata a valle."
+            ),
+            "quantified_impact": (
+                f"Stallo complessivo {kpis.get('stalled_area_percentage', 0.0):.2f}% della superficie, "
+                f"deportanza {kpis.get('downforce_total_N', 0.0):.1f} N, "
+                f"efficienza L/D = {kpis.get('efficiency_l_d', 0.0):.2f}."
+            ),
+            "cad_redesign_actions": [
+                "Verificare l'allineamento e l'altezza delle derive (strakes) lungo il canale Venturi: un disallineamento di pochi mm spegne la vorticita'.",
+                "Ridurre le perdite di tenuta laterale del fondo (skirt/skid) nella zona in cui il punteggio crolla.",
+                "Controllare che la giunzione flat_floor -> diffusore non introduca uno scalino che rompe il vortice.",
+            ],
+        })
 
     return issues

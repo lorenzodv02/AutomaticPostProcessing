@@ -1,8 +1,12 @@
-numpy>=1.24.0
-matplotlib>=3.7.0
-Pillow>=10.0.0
-opencv-python>=4.8.0
-PyYAML>=6.0
-scipy>=1.10.0
-google-genai>=0.3.0
-openai>=1.12.0
+# Dipendenze runtime del post-processing CFD
+# Minimi verificati + tetto di major per evitare salti incompatibili.
+numpy>=1.24.0,<3.0.0
+matplotlib>=3.7.0,<4.0.0
+Pillow>=10.0.0,<13.0.0
+opencv-python>=4.8.0,<5.0.0
+PyYAML>=6.0,<7.0.0
+scipy>=1.10.0,<2.0.0
+
+# Opzionali: solo per l'AI Vision Advisor (LLM). Il progetto funziona senza.
+google-genai>=0.3.0,<2.0.0
+openai>=1.12.0,<3.0.0

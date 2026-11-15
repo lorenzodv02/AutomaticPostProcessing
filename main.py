@@ -29,25 +29,26 @@ from analyzer.aero_plots import generate_aerodynamic_plots
 from analyzer.assembly_rules import evaluate_design_issues
 from analyzer.ai_vision_advisor import generate_ai_vision_commentary
 from reporting.report_builder import build_diagnostic_reports
+from config_bridge import merge_config
 
 
 def load_config(config_path: str = None) -> dict:
-    """Carica il file config.yaml o restituisce la configurazione predefinita."""
+    """
+    Carica il file config.yaml e lo fonde sopra i default di `config_bridge`.
+
+    Prima esistevano due set di default divergenti (questo e config.yaml):
+    una run senza config produceva numeri non confrontabili (16.67 m/s contro 14).
+    Ora la sorgente e' una sola: `config_bridge.DEFAULT_CONFIG`.
+    """
     if config_path is None:
         config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
     if os.path.isfile(config_path):
         with open(config_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
-    return {
-        "project": {"workspace_dir": ".", "output_dir": "./output_diagnostics", "assembly_type": "undertray"},
-        "coordinate_system": {"longitudinal_axis": "X", "vertical_axis": "Y", "lateral_axis": "Z"},
-        "reference_values": {"velocity_inf": 16.67, "density_air": 1.225, "pressure_inf": 0.0, "reference_area": 1.0},
-        "meta": {"executable_path": "auto", "batch_mode": True, "image_width": 1920, "image_height": 1080},
-        "ai_vision": {"enabled": True, "provider": "gemini", "model_gemini": "gemini-3.8-flash", "api_key": ""}
-    }
+            return merge_config(yaml.safe_load(f) or {})
+    return merge_config({})
 
 
-def execute_full_diagnostic_pipeline(config: dict, workspace_dir: str = None, log_fn=print) -> dict:
+def execute_full_diagnostic_pipeline(config: dict, workspace_dir: str = None, log_fn=print, force_meta_batch: bool = True) -> dict:
     """
     Esegue l'intera pipeline verificata in 4 fasi:
       1) Scompattazione binaria .cas/.dat, isolamento PID, esecuzione META Post v25.1 e rendering mesh reale
@@ -64,7 +65,9 @@ def execute_full_diagnostic_pipeline(config: dict, workspace_dir: str = None, lo
 
     # Fase 1: Estrazione Mesh/CFD Reale & Sessione META Post
     log_fn("[FASE 1/4] Scompattazione binaria .cas/.dat, isolamento PID ed esecuzione META Post...")
-    session_bundle = run_postprocessing_session(config, workspace_dir=workspace_dir, log_fn=log_fn)
+    session_bundle = run_postprocessing_session(
+        config, workspace_dir=workspace_dir, force_meta_batch=force_meta_batch, log_fn=log_fn
+    )
     pdata = session_bundle.get("physics_data", {})
     cas_info = session_bundle.get("cas_info", {})
     target_zones = cas_info.get("target_zones", [])
@@ -74,6 +77,12 @@ def execute_full_diagnostic_pipeline(config: dict, workspace_dir: str = None, lo
     log_fn(f"  -> File .dat: {session_bundle.get('dat_file')}")
     log_fn(f"  -> Nodi 3D reali letti: {pdata.get('nodes_read', 0):,} | Facce 3D reali lette: {pdata.get('faces_read', 0):,}")
     log_fn(f"  -> Modello Half-Car Simmetrico (symmetry Z=0): {pdata.get('is_half_car_symmetric', False)}")
+    _kpis = pdata.get("summary_kpis", {})
+    log_fn(
+        f"  -> Provenienza dato viscoso: {_kpis.get('viscous_source', 'n/d')} | "
+        f"CL*A = {_kpis.get('CL_A', 0.0)} m^2 | CL = {_kpis.get('CL', 0.0)} | "
+        f"CD = {_kpis.get('CD', 0.0)}"
+    )
     log_fn(f"  -> PID isolati ({len(target_zones)}): {[z['name'] for z in target_zones]}")
     log_fn(f"  -> Eseguibile META Post: {session_bundle.get('meta_executable') or 'Non rilevato'}")
     log_fn(f"  -> Viste mesh/CFD generate: {len(session_bundle['exported_images'])}")
@@ -133,6 +142,17 @@ def main():
     )
     parser.add_argument("--config", "-c", type=str, default=None, help="Percorso al file config.yaml")
     parser.add_argument("--meta-exe", type=str, default=None, help="Percorso all'eseguibile meta_post64.bat / meta_post.exe")
+    parser.add_argument(
+        "--no-meta-batch",
+        action="store_true",
+        help="Disabilita l'avvio batch di META Post e usa solo il motore Python autonomo",
+    )
+    parser.add_argument(
+        "--ai-model",
+        type=str,
+        default=None,
+        help="Modello AI Vision Advisor (default: dal config.yaml, es. gemini-3.8-flash)",
+    )
     parser.add_argument("--gui", action="store_true", help="Avvia l'interfaccia grafica desktop")
     parser.add_argument("--open-report", action="store_true", help="Apre automaticamente il report HTML nel browser")
 
@@ -145,12 +165,18 @@ def main():
         cfg["project"]["assembly_type"] = args.assembly
     if args.meta_exe:
         cfg["meta"]["executable_path"] = args.meta_exe
+    if args.ai_model:
+        provider = str(cfg.get("ai_vision", {}).get("provider", "gemini")).lower()
+        model_key = "model_openai" if provider == "openai" else "model_gemini"
+        cfg.setdefault("ai_vision", {})[model_key] = args.ai_model
 
     if args.gui:
         from gui_app import launch_gui
         launch_gui(cfg, execute_full_diagnostic_pipeline)
     else:
-        res = execute_full_diagnostic_pipeline(cfg, workspace_dir=args.workspace)
+        res = execute_full_diagnostic_pipeline(
+            cfg, workspace_dir=args.workspace, force_meta_batch=not args.no_meta_batch
+        )
         if args.open_report:
             html_p = res["reports"]["html_report"]
             if os.path.isfile(html_p):

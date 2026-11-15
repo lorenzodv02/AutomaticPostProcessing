@@ -26,6 +26,33 @@ import mmap
 import math
 import numpy as np
 
+from config_bridge import (
+    ASSEMBLY_KEYWORDS_FALLBACK,
+    assembly_keywords,
+    reference_values as resolve_reference_values,
+)
+
+
+# ---------------------------------------------------------------------------
+# CONVENZIONE DI SEGNO — documenta i numeri prodotti da questo modulo.
+#
+# La normale di faccia e'  n = 0.5 * [ (p1-p0)x(p2-p0) + (p2-p0)x(p3-p0) ]  e,
+# per le sezioni facce di Fluent (2013/3013), punta dal vicino c0 (cella
+# fluida) verso il vicino c1 (parete/solido). La forza esercitata DAL FLUIDO
+# SULLA PARETE e' quindi  F = p_rel * A * n  con  p_rel = p - p_inf.
+#
+# Conseguenze sui campi esposti (verificate da tests/test_sign_convention.py):
+#   * fy_p e' la componente lungo +Y (positiva = verso l'alto);
+#   * i campi `downforce_*` riportano la risultante verticale CON SEGNO, quindi
+#     un valore negativo indica spinta verso il basso (deportanza con +Y in su);
+#   * `vertical_force_y_N` e' l'alias esplicito della stessa grandezza;
+#   * i campi `drag_*` riportano il modulo, sempre >= 0.
+# ---------------------------------------------------------------------------
+SIGN_CONVENTION_NOTE = (
+    "F = p_rel * A * n ; +Y verso l'alto ; downforce_* = risultante verticale con "
+    "segno (negativa = spinta verso il basso) ; drag_* = modulo"
+)
+
 
 DOMAIN_KEYWORDS = [
     "inlet", "outlet", "symmetry", "sym", "farfield", "ground", "road",
@@ -33,49 +60,9 @@ DOMAIN_KEYWORDS = [
     "fluid", "interface", "ambient", "sky", "freestream", "auto_detected_volume"
 ]
 
-ASSEMBLY_RULES_KEYWORDS = {
-    "undertray": {
-        "include": [
-            "undertray", "flat_floor", "floor", "diffusore", "diffuser",
-            "venturi", "tray", "strake", "skid", "fondo", "bargeboard", "plank"
-        ],
-        "exclude": [
-            "front_main", "front_first", "front_second", "front_external", "front_internal", "front_midplate",
-            "rear_main", "rear_first", "rear_second", "rear_third", "rear_endplate",
-            "chassis", "pilota", "main_hoop", "camicie_motore", "lidar", "suspension", "tyre", "tire"
-        ]
-    },
-    "front_wing": {
-        "include": [
-            "front_main", "front_first", "front_second", "front_third",
-            "front_external_endplate", "front_internal_endplate", "front_midplate",
-            "front_wing", "frontwing", "fw", "footplate", "nose", "y250"
-        ],
-        "exclude": [
-            "front_suspension", "front_tyre", "front_tire", "interior_front",
-            "venturi", "flat_floor", "diffusore", "rear_", "chassis", "pilota"
-        ]
-    },
-    "rear_wing": {
-        "include": [
-            "rear_main", "rear_first", "rear_second", "rear_third",
-            "rear_endplate", "rear_wing", "rearwing", "rw", "beam_wing", "swan", "drs"
-        ],
-        "exclude": [
-            "rear_suspension", "rear_tyre", "rear_tire", "interior_rear",
-            "venturi", "flat_floor", "diffusore", "front_", "chassis", "pilota"
-        ]
-    },
-    "full_car": {
-        "include": [
-            "wall", "venturi", "flat_floor", "diffusore", "diffuser", "undertray", "floor",
-            "front_", "rear_", "chassis", "monocoque", "pilota", "driver", "sidepod",
-            "suspension", "tyre", "tire", "wheel", "main_hoop", "camicie_motore",
-            "lidar", "inverted", "zed"
-        ],
-        "exclude": []
-    }
-}
+# Keyword PID: unica sorgente in config_bridge.py (fallback storico, esteso da
+# config.yaml). L'alias conserva il nome pubblico usato altrove nel progetto.
+ASSEMBLY_RULES_KEYWORDS = ASSEMBLY_KEYWORDS_FALLBACK
 
 
 def canonical_pid_name(zname: str) -> str:
@@ -138,17 +125,23 @@ def is_domain_zone(zname: str, ztype: str) -> bool:
     return False
 
 
-def filter_zones_for_assembly(aero_zones: list, assembly_type: str) -> list:
+def filter_zones_for_assembly(aero_zones: list, assembly_type: str, config: dict = None) -> list:
     """
-    Seleziona rigorosamente SOLO le zone (PID) che appartengono all'assieme richiesto
-    (es. solo undertray: flat_floor*, diffusore_int*, venturi* senza ali, telaio o ruote).
+    Seleziona SOLO le zone (PID) che appartengono all'assieme richiesto
+    (es. solo undertray: flat_floor*, diffusore_int*, venturi* senza ali o ruote).
+
+    Le keyword arrivano da `config.yaml` (chiavi `pid_keywords` /
+    `exclude_keywords`) e vengono SOMMATE al fallback storico di
+    `config_bridge.ASSEMBLY_KEYWORDS_FALLBACK`: rendere configurabile il filtro
+    non puo' quindi far sparire un PID che prima era riconosciuto.
     """
-    if assembly_type not in ASSEMBLY_RULES_KEYWORDS or assembly_type == "full_car":
+    asm = str(assembly_type or "").strip().lower()
+    if asm == "full_car":
         return list(aero_zones)
 
-    rules = ASSEMBLY_RULES_KEYWORDS[assembly_type]
-    inc_kws = rules["include"]
-    exc_kws = rules["exclude"]
+    inc_kws, exc_kws = assembly_keywords(config, asm)
+    if not inc_kws and not exc_kws:
+        return list(aero_zones)
 
     selected = []
     for z in aero_zones:
@@ -162,7 +155,7 @@ def filter_zones_for_assembly(aero_zones: list, assembly_type: str) -> list:
     return selected if selected else list(aero_zones)
 
 
-def inspect_fluent_cas_zones(cas_path: str, requested_assembly: str = "undertray") -> dict:
+def inspect_fluent_cas_zones(cas_path: str, requested_assembly: str = "undertray", config: dict = None) -> dict:
     """
     Scansiona le tabelle delle zone (sezioni 39 e 45) nel file .cas di ANSYS Fluent.
     Restituisce:
@@ -217,7 +210,7 @@ def inspect_fluent_cas_zones(cas_path: str, requested_assembly: str = "undertray
     domain_zones = _group_zones_by_canonical_name(raw_domain_zones)
 
     assembly_zone_map = {
-        asm: filter_zones_for_assembly(aero_zones, asm)
+        asm: filter_zones_for_assembly(aero_zones, asm, config=config)
         for asm in ("undertray", "front_wing", "rear_wing", "full_car")
     }
 
@@ -408,6 +401,7 @@ def extract_real_mesh_and_cfd_data(
     cas_info: dict = None,
     assembly_type: str = "undertray",
     ref_values: dict = None,
+    config: dict = None,
     log_fn=print
 ) -> dict:
     """
@@ -419,7 +413,7 @@ def extract_real_mesh_and_cfd_data(
     if ref_values is None:
         ref_values = {}
     if cas_info is None:
-        cas_info = inspect_fluent_cas_zones(cas_path, requested_assembly=assembly_type)
+        cas_info = inspect_fluent_cas_zones(cas_path, requested_assembly=assembly_type, config=config)
     if not assembly_type or assembly_type == "auto":
         assembly_type = cas_info.get("detected_assembly", "undertray")
 
@@ -635,10 +629,24 @@ def extract_real_mesh_and_cfd_data(
     if not zone_meshes:
         raise RuntimeError(f"Impossibile estrarre le facce 3D per l'assieme '{assembly_type}' dal file .cas.")
 
-    # Calcola il Bounding Box 3D REALE complessivo dell'assieme selezionato
-    all_centroids = np.vstack([zm["centroids"] for zm in zone_meshes.values()])
-    xmin, ymin, zmin = np.min(all_centroids, axis=0)
-    xmax, ymax, zmax = np.max(all_centroids, axis=0)
+    # Calcola il Bounding Box 3D REALE dell'assieme selezionato.
+    # Deve includere TUTTI i vertici delle facce: usando i baricentri (come prima)
+    # l'ingombro risultava sottostimato e, su mesh grossolane, poteva sbagliare
+    # anche il rilevamento millimetri/metri fatto piu' sotto. Il calcolo e'
+    # incrementale per non allocare una copia di tutti i nodi in memoria.
+    bounds_min = np.full(3, np.inf, dtype=np.float64)
+    bounds_max = np.full(3, -np.inf, dtype=np.float64)
+    for zm in zone_meshes.values():
+        for vertex_key in ("p0", "p1", "p2", "p3"):
+            coords = zm[vertex_key]
+            if coords.size == 0:
+                continue
+            bounds_min = np.minimum(bounds_min, np.min(coords, axis=0))
+            bounds_max = np.maximum(bounds_max, np.max(coords, axis=0))
+    if not np.all(np.isfinite(bounds_min)):
+        raise RuntimeError(f"Nessun vertice valido per l'assieme '{assembly_type}': impossibile calcolare il bounding box.")
+    xmin, ymin, zmin = (float(value) for value in bounds_min)
+    xmax, ymax, zmax = (float(value) for value in bounds_max)
 
     # Verifica se le coordinate del file .cas sono in millimetri (es. lunghezza > 50) o in metri
     coord_scale_to_m = 0.001 if (xmax - xmin) > 50.0 else 1.0
@@ -937,10 +945,14 @@ def extract_real_mesh_and_cfd_data(
     # --------------------------------------------------------------------------
     # 3. CALCOLO METRICHE AERODINAMICHE REALI DALLE FACCE DELLA MESH E DAL .DAT
     # --------------------------------------------------------------------------
-    v_inf = float(ref_values.get("velocity_inf", 16.67))
-    rho = float(ref_values.get("density_air", 1.225))
-    p_inf = float(ref_values.get("pressure_inf", 0.0))
-    mu = float(ref_values.get("viscosity_mu", 1.7894e-5))
+    # Grandezze di riferimento: i valori passati dal chiamante vincono, ogni buco
+    # viene riempito dai default di config_bridge (allineati a config.yaml).
+    refs = resolve_reference_values({"reference_values": ref_values or {}})
+    v_inf = float(refs.get("velocity_inf", 14.0))
+    rho = float(refs.get("density_air", 1.225))
+    p_inf = float(refs.get("pressure_inf", 0.0))
+    mu = float(refs.get("viscosity_mu", 1.7894e-5))
+    ref_area_m2 = float(refs.get("reference_area", 1.08))
     q_inf = max(0.5 * rho * (v_inf ** 2), 1e-4)
 
     is_half_car = cas_info.get("is_half_car_symmetric", False)
@@ -964,6 +976,8 @@ def extract_real_mesh_and_cfd_data(
         tau_wx = zm["tau_wx_pa"]
         f_visc_x = zm.get("f_visc_x_N", np.zeros_like(tau_wx))
         f_visc_y = zm.get("f_visc_y_N", np.zeros_like(tau_wx))
+        # Provenienza del dato viscoso: "fluent" = letto dalla sub_id 19 del .dat,
+        # "estimated" = ricostruito col coefficiente d'attrito empirico, "none" = assente.
         if np.max(np.abs(f_visc_x)) < 1e-10 and np.max(np.abs(zm["vx_near_wall"])) > 1e-6:
             # Attrito viscoso proporzionale alla velocita' tangenziale nel primo strato a parete
             v_mag_nw = np.sqrt(zm["vx_near_wall"]**2 + zm["vy_near_wall"]**2 + zm["vz_near_wall"]**2)
@@ -973,9 +987,14 @@ def extract_real_mesh_and_cfd_data(
             zm["tau_mag_pa"] = np.abs(cf_est * q_inf).astype(np.float32)
             f_visc_x = (tau_wx * areas_m2).astype(np.float32)
             zm["f_visc_x_N"] = f_visc_x
-        elif np.max(np.abs(f_visc_x)) > 1e-10 and np.max(np.abs(tau_wx)) < 1e-6:
-            tau_wx = (-f_visc_x / np.maximum(areas_m2, 1e-12)).astype(np.float32)
-            zm["tau_wx_pa"] = tau_wx
+            zm["viscous_source"] = "estimated"
+        elif np.max(np.abs(f_visc_x)) > 1e-10:
+            if np.max(np.abs(tau_wx)) < 1e-6:
+                tau_wx = (-f_visc_x / np.maximum(areas_m2, 1e-12)).astype(np.float32)
+                zm["tau_wx_pa"] = tau_wx
+            zm["viscous_source"] = "fluent"
+        else:
+            zm["viscous_source"] = "none"
 
         zm["cp"] = cp
 
@@ -1077,6 +1096,7 @@ def extract_real_mesh_and_cfd_data(
             "drag_1x_N": round(dr_tot_1x, 2),
             "drag_2x_N": dr_tot_2x,
             "efficiency_ld": ld_pid,
+            "viscous_source": zm.get("viscous_source", "none"),
             "stalled_area_pct": round(stalled_area_m2 / max(total_area_m2, 1e-9) * 100.0, 2),
             "bbox": zm["bbox"]
         })
@@ -1112,6 +1132,23 @@ def extract_real_mesh_and_cfd_data(
     cla_val = downforce_N / q_inf
     cda_val = drag_N / q_inf
     ld_val = cla_val / max(cda_val, 1e-6)
+
+    # Provenienza del dato viscoso a livello di assieme.
+    _sources = {p.get("viscous_source", "none") for p in per_pid_breakdown}
+    if _sources == {"fluent"}:
+        viscous_source_global = "fluent"
+    elif "fluent" in _sources:
+        viscous_source_global = "mixed"
+    elif "estimated" in _sources:
+        viscous_source_global = "estimated"
+    else:
+        viscous_source_global = "none"
+
+    # Coefficienti adimensionali: e' qui che `reference_area` di config.yaml
+    # diventa significativa (CL*A e CD*A restano indipendenti dall'area).
+    _q_area = q_inf * ref_area_m2
+    cl_val = downforce_N / _q_area if _q_area > 1e-9 else 0.0
+    cd_val = drag_N / _q_area if _q_area > 1e-9 else 0.0
 
     # Per compatibilita' con i calcoli cumulativi:
     total_fy_raw = downforce_N
@@ -1262,6 +1299,12 @@ def extract_real_mesh_and_cfd_data(
                 "drag_total_N": round(drag_N, 1),
                 "drag_pressure_total_N": round(drag_pressure_N, 1),
                 "drag_viscous_total_N": round(drag_viscous_N, 1),
+                "CL": round(cl_val, 4),
+                "CD": round(cd_val, 4),
+                "reference_area_m2": round(ref_area_m2, 4),
+                "viscous_source": viscous_source_global,
+                "vertical_force_y_N": round(downforce_N, 1),
+                "sign_convention": SIGN_CONVENTION_NOTE,
                 "CL_A": round(cla_val, 3),
                 "cl_a_total": round(cla_val, 3),
                 "CD_A": round(cda_val, 3),

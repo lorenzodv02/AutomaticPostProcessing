@@ -122,6 +122,7 @@ Opzioni:
 AutomaticPostProcessing/
 ├── main.py                          # Entry point CLI ed orchestratore della pipeline
 ├── gui_app.py                       # Applicazione Desktop GUI completa (Tkinter)
+├── config_bridge.py                 # Ponte unico config.yaml <-> codice (keyword, soglie, tagli, cp_range)
 ├── config.yaml                      # Configurazione parametri fisici, soglie e percorsi
 ├── requirements.txt                 # Dipendenze Python
 ├── install_dependencies.bat         # Launcher Windows 1-click installazione librerie
@@ -144,6 +145,13 @@ AutomaticPostProcessing/
 │
 └── reporting/                       # Builder Report Interattivo ed Esportatore Dati
     └── report_builder.py            # Generatore HTML Standalone (Base64) ed Excel (.xlsx)
+│
+└── tests/                           # Test automatizzati (parser, config, soglie)
+    ├── fixtures.py                  # Genera un .cas/.dat minimo con attese calcolate a mano
+    ├── test_parser_synthetic.py     # End-to-end: aree, forze, Cp, tau, fonte del dato viscoso
+    ├── test_config_bridge.py        # Le chiavi di config.yaml devono essere davvero lette
+    ├── test_rules_thresholds.py     # Severita' della diagnosi guidata dalle soglie
+    └── run_tests.py                 # Runner senza dipendenze (python tests/run_tests.py)
 ```
 
 ---
@@ -170,6 +178,74 @@ Al termine dell'elaborazione, nella cartella di lavoro contenente i file CFD ven
 
 ---
 
+## ⚙️ Configurazione: cosa è davvero collegato
+
+La configurazione è letta da `config_bridge.py`: **non ci sono più valori duplicati o chiavi finte**.
+
+| Chiave di `config.yaml` | Effetto reale |
+| --- | --- |
+| `project.workspace_dir` / `output_dir` / `assembly_type` | cartelle e assieme di default |
+| `reference_values.*` | integrali di forza e coefficienti (`reference_area` serve a CL e CD) |
+| `meta.*` | esecuzione META Post e risoluzione immagini |
+| `assemblies.<t>.pid_keywords` / `exclude_keywords` | filtro dei PID (si **sommano** al fallback storico) |
+| `assemblies.<t>.x_cuts_normalized` / `z_cuts_normalized` | stazioni delle sezioni disegnate (valori > 1.0 scartati) |
+| `assemblies.<t>.thresholds` | severità della diagnosi (stallo, Cp, asimmetria, vortici) |
+| `assemblies.<t>.cp_range` | scala colore del Cp |
+| `ai_vision.*` | commento AI opzionale |
+
+Restano nel file solo come **documentazione** (nessun codice le legge): `coordinate_system`, `fluent_variables`, `wheelbase`.
+Sono state rimosse le chiavi inutilizzate `y_cuts_normalized` e `primary_suction_view`.
+
+> **Nota sulle stazioni.** `x_cuts_normalized` / `z_cuts_normalized` governano le *sezioni renderizzate*. La griglia di campionamento dei KPI lungo X resta canonica a 10 stazioni: i numeri restano così confrontabili anche cambiando i tagli.
+
+## 🧪 Test automatici
+
+```bash
+python tests/run_tests.py      # nessuna dipendenza oltre numpy + PyYAML
+# oppure, con pytest installato:
+pip install -r requirements-dev.txt && pytest -q
+```
+
+I test costruiscono un caso Fluent **sintetico** (`.cas`/`.dat` minimi, 4 nodi, 3 triangoli) con valori calcolati a mano. Coprono il punto più fragile del progetto: il parser può sbagliare gli offset in silenzio e falsare ogni numero del report.
+
+| Test | Cosa garantisce |
+| --- | --- |
+| `test_parser_synthetic.py` | lettura zone/nodi/facce, aree, normali, Cp, `tau_w,x`, scomposizione drag, fonti viscose, convenzione di segno |
+| `test_config_bridge.py` | le chiavi di `config.yaml` sono lette davvero; i PID del modello restano selezionati |
+| `test_rules_thresholds.py` | le soglie cambiano davvero la severità della diagnosi |
+
+La CI (`.github/workflows/ci.yml`) li esegue su Python 3.10, 3.12 e 3.13 a ogni push e pull request.
+
+## 🧭 Convenzione di segno (dichiarata nel codice)
+
+Le normali delle facce puntano dal vicino `c0` (fluido) al vicino `c1` (parete), quindi la forza del fluido sulla parete è `F = p_rel · A · n`:
+
+- i campi `downforce_*` riportano la **risultante verticale con segno** (negativa = spinta verso il basso);
+- `vertical_force_y_N` è l'alias esplicito della stessa grandezza;
+- i campi `drag_*` riportano il modulo, sempre ≥ 0.
+
+La definizione completa è in `fluent_parser.SIGN_CONVENTION_NOTE` ed è verificata da `tests/test_parser_synthetic.py::test_forces_follow_the_documented_convention`.
+
 ## 🛠️ Licenza
 
 Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE` per ulteriori dettagli.
+
+---
+
+## 📝 Changelog
+
+### Rifattorizzazione "configurazione viva" + test
+
+- **Nuovo `config_bridge.py`**: unica sorgente di default e risoluzione della configurazione.
+- **`config.yaml` finalmente efficace**: keyword PID, stazioni di taglio, soglie, `cp_range` e `reference_area` sono ora letti dal codice; prima erano ignorati.
+- **Keyword additive**: quelle del file si sommano al fallback storico, quindi nessun PID già riconosciuto può sparire (era il rischio principale, es. `diffusore_int` contro `diffuser`).
+- **Default allineati**: `load_config()` non usa più 16.67 m/s e area 1.0 contro i 14 m/s e 1.08 del file.
+- **CL e CD** calcolati con `reference_area` (`CL*A` e `CD*A` restano invariati).
+- **`--no-meta-batch` e `--ai-model`** ora esistono davvero in `argparse` (erano documentati ma assenti).
+- **Fonte del dato viscoso**: nuovi campi `viscous_source` per PID e per assieme (`fluent` / `estimated` / `mixed` / `none`), così una stima non viene scambiata per un dato Fluent.
+- **Convenzione di segno dichiarata** e coperta da test (`SIGN_CONVENTION_NOTE`, `vertical_force_y_N`).
+- **Bounding box corretto**: ora usa tutti i vertici delle facce invece dei baricentri (prima l'ingombro era sottostimato, con rischio di sbagliare il rilevamento mm/metri).
+- **Nuovo check CHK-07** nel verifier: i totali del report devono coincidere con la somma dei PID.
+- **Nuova problematica WARN-05**: perdita di integrità dei vortici oltre `vortex_core_loss_threshold` (chiave prima inutilizzata).
+- **Test + CI**: caso `.cas`/`.dat` sintetico con attese a mano, suite eseguibile senza dipendenze, workflow GitHub Actions.
+- **Dipendenze con tetto di major** e `requirements-dev.txt` separato.

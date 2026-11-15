@@ -30,6 +30,10 @@ from meta_driver.fluent_parser import (
     extract_real_mesh_and_cfd_data,
 )
 from meta_driver.ses_generator import generate_meta_session_file
+from config_bridge import (
+    cp_range as resolve_cp_range,
+    cut_stations as resolve_cut_stations,
+)
 
 
 def discover_cas_dat(workspace_dir: str):
@@ -605,6 +609,9 @@ def _render_real_unpacked_mesh_views(
     dat_file: str,
     img_w: int = 1920,
     img_h: int = 1080,
+    cp_range: tuple = None,
+    x_stations: list = None,
+    z_stations: list = None,
 ) -> list:
     """
     Renderizza le viste diagnostiche proiettando DIRETTAMENTE i veri triangoli 3D e i veri campi CFD
@@ -620,6 +627,11 @@ def _render_real_unpacked_mesh_views(
     fig_w, fig_h = img_w / dpi, img_h / dpi
 
     is_sym = bool(physics_data.get("is_half_car_symmetric", False))
+
+    # Scala Cp dell'assieme letta da config.yaml (fallback: la scala storica -3.0 .. +1.0).
+    # Va definita qui, prima delle mappe di superficie e delle sezioni X/Z.
+    vmin_cp_global, vmax_cp_global = tuple(cp_range) if cp_range else (-3.0, 1.0)
+
     mesh_full = _combine_real_zone_meshes(zone_meshes, mirror_symmetry=is_sym)
     mesh_half = _combine_real_zone_meshes(zone_meshes, mirror_symmetry=False)
     if mesh_full is None or mesh_half is None:
@@ -723,7 +735,7 @@ def _render_real_unpacked_mesh_views(
     if not _is_valid_meta_screenshot(p1):
         fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
         order_bot = np.argsort(-tri_centers[:, 1])  # Triangoli con Y minore (fondo inferiore) disegnati sopra
-        im = _safe_tripcolor(ax, pts[:, 0], pts[:, 2], tris[order_bot], cp_vals[order_bot], cmap="jet", vmin=-3.0, vmax=1.0, shading="flat")
+        im = _safe_tripcolor(ax, pts[:, 0], pts[:, 2], tris[order_bot], cp_vals[order_bot], cmap="jet", vmin=vmin_cp_global, vmax=vmax_cp_global, shading="flat")
         if is_sym:
             ax.axhline(0.0, color="#1e293b", linestyle="--", linewidth=1.2, alpha=0.7)
         cbar = fig.colorbar(im, ax=ax, fraction=0.035, pad=0.02)
@@ -763,7 +775,7 @@ def _render_real_unpacked_mesh_views(
     if not _is_valid_meta_screenshot(p2):
         fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
         order_top = np.argsort(tri_centers[:, 1])  # Triangoli con Y maggiore disegnati sopra
-        im = _safe_tripcolor(ax, pts[:, 0], pts[:, 2], tris[order_top], cp_vals[order_top], cmap="jet", vmin=-3.0, vmax=1.0, shading="flat")
+        im = _safe_tripcolor(ax, pts[:, 0], pts[:, 2], tris[order_top], cp_vals[order_top], cmap="jet", vmin=vmin_cp_global, vmax=vmax_cp_global, shading="flat")
         if is_sym:
             ax.axhline(0.0, color="#1e293b", linestyle="--", linewidth=1.2, alpha=0.7)
         cbar = fig.colorbar(im, ax=ax, fraction=0.035, pad=0.02)
@@ -807,7 +819,7 @@ def _render_real_unpacked_mesh_views(
         c_h = (pts_h[tris_h[:, 0]] + pts_h[tris_h[:, 1]] + pts_h[tris_h[:, 2]]) / 3.0
         order_side = np.argsort(c_h[:, 2])  # Ordina lungo Z
         fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
-        im = _safe_tripcolor(ax, pts_h[:, 0], pts_h[:, 1], tris_h[order_side], cp_h[order_side], cmap="jet", vmin=-3.0, vmax=1.0, shading="flat")
+        im = _safe_tripcolor(ax, pts_h[:, 0], pts_h[:, 1], tris_h[order_side], cp_h[order_side], cmap="jet", vmin=vmin_cp_global, vmax=vmax_cp_global, shading="flat")
         ax.axhline(ymin, color="#0f172a", linewidth=2.0, linestyle="-", label="Piano Suolo (Road)")
         cbar = fig.colorbar(im, ax=ax, fraction=0.035, pad=0.02)
         cbar.set_label("Pressure Coefficient Cp [-]", fontsize=10, fontweight="bold")
@@ -858,7 +870,7 @@ def _render_real_unpacked_mesh_views(
         order_iso = np.argsort(tri_depth)
 
         fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
-        im = _safe_tripcolor(ax, u_iso, v_iso, tris[order_iso], cp_vals[order_iso], cmap="jet", vmin=-3.0, vmax=1.0, shading="flat")
+        im = _safe_tripcolor(ax, u_iso, v_iso, tris[order_iso], cp_vals[order_iso], cmap="jet", vmin=vmin_cp_global, vmax=vmax_cp_global, shading="flat")
         cbar = fig.colorbar(im, ax=ax, fraction=0.035, pad=0.02)
         cbar.set_label("Pressure Coefficient Cp [-]", fontsize=10, fontweight="bold")
         _style_real_mesh_ax(
@@ -971,12 +983,11 @@ def _render_real_unpacked_mesh_views(
     # --------------------------------------------------------------------------
     # 7. SEZIONI TRASVERSALI REALE MESH X-CUTS (Piani YZ normali a X con Contour 2D Cp) - 10 STAZIONI
     # --------------------------------------------------------------------------
-    vmin_cp_global = -3.0
-    vmax_cp_global = 1.0
+    # (scala Cp definita in testa alla funzione, condivisa da tutte le viste)
     levels_cp = np.linspace(vmin_cp_global, vmax_cp_global, 21)
 
     # 10 sezioni trasversali progressive dall'anteriore (10% L) al posteriore (98% L)
-    x_stations = [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.98]
+    x_stations = list(x_stations) if x_stations else [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.98]
     slice_half_dx = 0.024 * L
     for idx, x_norm in enumerate(x_stations, start=1):
         x_coord = xmin + x_norm * L
@@ -1060,7 +1071,7 @@ def _render_real_unpacked_mesh_views(
     z_span_h = max(abs(zmin_orig - zmax_orig), 0.1)
 
     # 10 stazioni progressive distribuite lungo l'apertura trasversale (span)
-    z_stations = [0.02, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.82, 0.94]
+    z_stations = list(z_stations) if z_stations else [0.02, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.82, 0.94]
 
     meta_cp_colors = [
         "#250e35",  # < -3.00 (dark violet/purple)
@@ -1368,7 +1379,7 @@ def _render_real_unpacked_mesh_views(
         tri_d = (depth_p[tris[:, 0]] + depth_p[tris[:, 1]] + depth_p[tris[:, 2]]) / 3.0
         order_3d = np.argsort(tri_d)
 
-        _safe_tripcolor(ax, u_p, v_p, tris[order_3d], cp_vals[order_3d], cmap="coolwarm", vmin=-3.0, vmax=1.0, alpha=0.35, shading="flat")
+        _safe_tripcolor(ax, u_p, v_p, tris[order_3d], cp_vals[order_3d], cmap="coolwarm", vmin=vmin_cp_global, vmax=vmax_cp_global, alpha=0.35, shading="flat")
 
         seg_iso, vel_iso = [], []
         for s in slines:
@@ -1422,7 +1433,7 @@ def _render_real_unpacked_mesh_views(
         fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
         ax.set_facecolor("#f0f4f8")
         order_top = np.argsort(tri_centers[:, 1])
-        _safe_tripcolor(ax, pts[:, 0], pts[:, 2], tris[order_top], cp_vals[order_top], cmap="jet", vmin=-3.0, vmax=1.0, alpha=0.36, shading="flat")
+        _safe_tripcolor(ax, pts[:, 0], pts[:, 2], tris[order_top], cp_vals[order_top], cmap="jet", vmin=vmin_cp_global, vmax=vmax_cp_global, alpha=0.36, shading="flat")
 
         seg_top, vel_top = [], []
         for s in slines:
@@ -1475,7 +1486,7 @@ def _render_real_unpacked_mesh_views(
         cp_h = mesh_half["cp"]
         c_h = (pts_h[tris_h[:, 0]] + pts_h[tris_h[:, 1]] + pts_h[tris_h[:, 2]]) / 3.0
         order_side = np.argsort(c_h[:, 2])
-        _safe_tripcolor(ax, pts_h[:, 0], pts_h[:, 1], tris_h[order_side], cp_h[order_side], cmap="jet", vmin=-3.0, vmax=1.0, alpha=0.35, shading="flat")
+        _safe_tripcolor(ax, pts_h[:, 0], pts_h[:, 1], tris_h[order_side], cp_h[order_side], cmap="jet", vmin=vmin_cp_global, vmax=vmax_cp_global, alpha=0.35, shading="flat")
         ax.axhline(ymin, color="#0f172a", linewidth=2.5, label="Piano Suolo (Road)")
 
         seg_side, vel_side = [], []
@@ -1525,7 +1536,7 @@ def _render_real_unpacked_mesh_views(
         fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
         ax.set_facecolor("#f0f4f8")
         order_bot = np.argsort(-tri_centers[:, 1])
-        _safe_tripcolor(ax, pts[:, 0], pts[:, 2], tris[order_bot], cp_vals[order_bot], cmap="jet", vmin=-3.0, vmax=1.0, alpha=0.38, shading="flat")
+        _safe_tripcolor(ax, pts[:, 0], pts[:, 2], tris[order_bot], cp_vals[order_bot], cmap="jet", vmin=vmin_cp_global, vmax=vmax_cp_global, alpha=0.38, shading="flat")
 
         seg_bot, vel_bot = [], []
         for s in slines:
@@ -1583,7 +1594,7 @@ def _render_real_unpacked_mesh_views(
         depth_pr = -yn * np.sin(el_r) + (xn * np.sin(az_r) + zn * np.cos(az_r)) * np.cos(el_r)
         order_3d_r = np.argsort(depth_pr[tris].mean(axis=1))
 
-        _safe_tripcolor(ax, u_pr, v_pr, tris[order_3d_r], cp_vals[order_3d_r], cmap="coolwarm", vmin=-3.0, vmax=1.0, alpha=0.35, shading="flat")
+        _safe_tripcolor(ax, u_pr, v_pr, tris[order_3d_r], cp_vals[order_3d_r], cmap="coolwarm", vmin=vmin_cp_global, vmax=vmax_cp_global, alpha=0.35, shading="flat")
 
         seg_rear, vel_rear = [], []
         for s in slines:
@@ -1663,6 +1674,7 @@ def run_postprocessing_session(config: dict, workspace_dir: str = None, force_me
         dat_path=dat_file,
         assembly_type=requested_asm,
         ref_values=config.get("reference_values", {}),
+        config=config,
         log_fn=log_fn,
     )
 
@@ -1744,6 +1756,9 @@ def run_postprocessing_session(config: dict, workspace_dir: str = None, force_me
         dat_file=dat_file,
         img_w=int(config.get("meta", {}).get("image_width", 1920)),
         img_h=int(config.get("meta", {}).get("image_height", 1080)),
+        cp_range=resolve_cp_range(config, assembly_type),
+        x_stations=resolve_cut_stations(config, assembly_type)[0],
+        z_stations=resolve_cut_stations(config, assembly_type)[1],
     )
 
     session_bundle = {
@@ -1761,6 +1776,9 @@ def run_postprocessing_session(config: dict, workspace_dir: str = None, force_me
         "exported_images": exported_images,
         "xcut_cp_gif": os.path.join(output_dir, "images_raw", "10_cp_xcut_progressive_sweep.gif"),
         "physics_data": physics_data,
+        # La configurazione effettiva viaggia col bundle: le fasi 2-4 (soglie,
+        # diagnosi, report) leggono da qui invece di duplicare valori cablati.
+        "config": config,
     }
 
     extracted_json = os.path.join(output_dir, "cfd_extracted_data.json")

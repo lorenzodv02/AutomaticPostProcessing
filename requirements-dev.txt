@@ -1,0 +1,3 @@
+# Dipendenze per sviluppo e test (i test non richiedono matplotlib/scipy/opencv)
+-r requirements.txt
+pytest>=8.0,<10.0
