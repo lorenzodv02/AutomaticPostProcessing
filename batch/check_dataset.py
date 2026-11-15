@@ -20,7 +20,7 @@ from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from make_tables import iterations_from_name  # noqa: E402
+from make_tables import iterations_from_name, load_exclusions  # noqa: E402
 
 TOLERANCE_PCT = 0.5
 
@@ -58,10 +58,13 @@ def plausibility_issues(kpis: dict) -> list:
 
 
 def load(data_dir: str) -> list:
+    excluded = load_exclusions(data_dir)
     cases = []
     for path in sorted(glob.glob(os.path.join(data_dir, "*.json"))):
         name = os.path.basename(path)
         if name.startswith("_"):
+            continue
+        if os.path.splitext(name)[0] in excluded:
             continue
         try:
             with open(path, "r", encoding="utf-8") as handle:
@@ -126,7 +129,10 @@ def main() -> int:
         lines.append(text)
 
     out("CONTROLLI DI COERENZA — %s" % data_dir)
-    out("casi: %d" % len(cases))
+    excluded = load_exclusions(data_dir)
+    out("casi: %d%s" % (len(cases),
+                        ("  (esclusi da %s: %d)" % ("escludi.txt", len(excluded)))
+                        if excluded else ""))
     out("")
 
     broken = [c for c in cases if c.get("error")]

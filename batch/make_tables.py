@@ -23,6 +23,26 @@ import re
 # Fluent salva i file come <nome>-<passo>-<iterazioni>.cas (es. V14_3-1-01250.cas):
 # l'ultimo numero e' l'iterazione a cui e' stato scritto il caso.
 ITERATION_RE = re.compile(r"-(\d+)-(\d+)$")
+EXCLUSIONS_FILE = "escludi.txt"
+
+
+def load_exclusions(data_dir):
+    """
+    Casi da ignorare, uno per riga in `escludi.txt` (righe con # = commento).
+
+    Serve a togliere dal dataset i casi non validi senza cancellare i file:
+    l'esclusione resta scritta e tracciabile accanto ai risultati.
+    """
+    path = os.path.join(data_dir, EXCLUSIONS_FILE)
+    if not os.path.isfile(path):
+        return set()
+    excluded = set()
+    with open(path, "r", encoding="utf-8-sig") as handle:
+        for line in handle:
+            name = line.split("#", 1)[0].strip()
+            if name:
+                excluded.add(name)
+    return excluded
 
 
 def iterations_from_name(filename):
@@ -83,10 +103,13 @@ PID_COLUMNS = [
 
 
 def load_cases(data_dir: str) -> list:
+    excluded = load_exclusions(data_dir)
     cases = []
     for path in sorted(glob.glob(os.path.join(data_dir, "*.json"))):
         name = os.path.basename(path)
         if name.startswith("_"):
+            continue
+        if os.path.splitext(name)[0] in excluded:
             continue
         try:
             with open(path, "r", encoding="utf-8") as handle:
@@ -149,6 +172,7 @@ def main() -> int:
         print("ERRORE: cartella non trovata: %s" % data_dir)
         return 2
 
+    excluded = load_exclusions(data_dir)
     cases = load_cases(data_dir)
     if not cases:
         print("Nessun JSON valido in: %s" % data_dir)
@@ -197,6 +221,8 @@ def main() -> int:
     write_csv(pid_path, pid_header, pid_rows)
 
     print("Casi letti      : %d" % len(cases))
+    if excluded:
+        print("Esclusi         : %d (%s)" % (len(excluded), EXCLUSIONS_FILE))
     print("dataset.csv     : %d righe x %d colonne" % (len(rows), len(header)))
     print("dataset_pid.csv : %d righe x %d colonne" % (len(pid_rows), len(pid_header)))
     if meta_header:

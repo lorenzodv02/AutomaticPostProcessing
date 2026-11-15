@@ -268,3 +268,18 @@ def test_plausibility_flags_broken_case():
     }
     assert plausibility_issues(good) == []
     assert plausibility_issues({}) == []
+
+def test_exclusions_file_removes_cases():
+    """`escludi.txt` toglie i casi dal dataset senza cancellare i JSON."""
+    sys.path.insert(0, os.path.join(REPO, "batch"))
+    from make_tables import load_exclusions
+
+    base = tempfile.mkdtemp(prefix="batch_excl_")
+    try:
+        assert load_exclusions(base) == set()
+        with open(os.path.join(base, "escludi.txt"), "w", encoding="utf-8") as handle:
+            handle.write("# casi non validi\nV14\nv16-70-50__3  # divergente\n\n")
+        excluded = load_exclusions(base)
+        assert excluded == {"V14", "v16-70-50__3"}, excluded
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
