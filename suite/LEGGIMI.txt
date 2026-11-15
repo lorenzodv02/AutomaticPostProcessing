@@ -1,15 +1,18 @@
 Aero Suite — un processo, un report
 ===================================
 
-Un solo comando che porta dal `.cas` al progetto: estrae la geometria **di ogni
-assieme** (fondo, ala anteriore, ala posteriore, corpo, gomme) dalla mesh,
-costruisce le tabelle e genera **un unico report brandizzato** (`Aero_Suite.html`)
-con cinque sezioni:
+Un solo comando che porta dal `.cas` al progetto **completo**: esegue la corsa
+di post-processing per ogni caso (immagini, report HTML/PDF, xlsx, AI Vision se
+configurata), estrae la geometria **di ogni assieme** (fondo, ala anteriore,
+ala posteriore, corpo, gomme), costruisce le tabelle e genera **un unico report
+brandizzato** (`Aero_Suite.html`) con sei sezioni:
 
     01 Panoramica      KPI, mappa deportanza/resistenza, tabella dei casi
     02 Confronto zone  differenza per zona tra due casi qualsiasi
     03 Sintesi         vettura ricomposta zona per zona, con filtro per famiglia
     04 Geometria       profili del fondo, ali (apertura/corda/area/AR), superfici, correlazioni
+    05 Casi e report   report HTML/PDF/xlsx e immagini di ogni caso, AI Vision
+    06 Metodo         catena dei passaggi e limiti
     05 Metodo          catena dei passaggi e limiti
 
 Cosa serve
@@ -25,9 +28,11 @@ Python 3.8+ (solo libreria standard). META Post non serve.
 Uso
 ---
 1. Doppio clic su `suite\00_Aero_Suite.bat`, trascina la cartella `_dati_batch`.
-2. Il bat fa tre passi e apre il report:
-   - geometria: per ogni caso lancia `FS-MetaPostDiag.exe --geometry-only`
-     e salva `geom\<caso>.json` (salta i casi già fatti, `--force` per rifarli);
+2. Il bat fa quattro passi e apre il report:
+   - **report completi**: per ogni caso lancia l'app completa (mesh, forze, immagini,
+     META, report HTML/PDF, AI Vision se configurata) e sposta gli output in
+     `cases\<caso>\`. Puoi saltarli rispondendo `n` (la suite diventa veloce);
+   - geometria: geometria di ogni assieme dal .cas (salta i casi già fatti);
    - tabelle: `dataset_geom.csv` con geometria + forze e le correlazioni;
    - dashboard: `Aero_Suite.html`.
 

@@ -97,6 +97,8 @@ __BRAND_VARS__
                 border-top: 1px solid var(--border-soft); }
   .wordmark { height: 22px; object-fit: contain; }
   .empty { color: var(--muted); font-size: 12.5px; }
+  a.lnk { color: var(--gold); text-decoration: none; font-family: var(--font-data); }
+  a.lnk:hover { text-decoration: underline; }
   @media (max-width: 1000px) { .kpis { grid-template-columns: repeat(2,1fr); } .packages { grid-template-columns: 1fr; } }
   @media (max-width: 760px) { .two { grid-template-columns: 1fr; } .bar-row { grid-template-columns: 110px 1fr 74px; } }
 </style>
@@ -109,7 +111,8 @@ __HEADER__
   <button class="tab" data-tab="zones"><span class="n">02</span>Confronto zone</button>
   <button class="tab" data-tab="synthesis"><span class="n">03</span>Sintesi</button>
   <button class="tab" data-tab="geometry"><span class="n">04</span>Geometria</button>
-  <button class="tab" data-tab="method"><span class="n">05</span>Metodo</button>
+  <button class="tab" data-tab="cases"><span class="n">05</span>Casi e report</button>
+  <button class="tab" data-tab="method"><span class="n">06</span>Metodo</button>
 </div>
 
 <section class="panel active" id="panel-overview">
@@ -192,6 +195,16 @@ __HEADER__
     <h2><span class="accent"></span>Correlazioni</h2>
     <p class="hint">Pearson fra metrica geometrica e prestazione. Con pochi casi serve a scegliere la prossima prova.</p>
     <div id="geom-corr"></div>
+  </div>
+</section>
+
+<section class="panel" id="panel-cases">
+  <div class="card">
+    <h2><span class="accent"></span>Casi e report completi</h2>
+    <p class="hint">Per ogni caso: il report HTML della corsa completa (con le immagini), il PDF/xlsx se
+       prodotti, quante immagini sono state generate e se l'AI Vision e' stata usata.</p>
+    <div id="cases-table"></div>
+    <p class="hint" id="cases-note" style="margin-top:8px;"></p>
   </div>
 </section>
 
@@ -564,6 +577,37 @@ __FOOTER__
       }).join("") + '</tbody></table>' : '<p class="empty">Servono almeno 4 casi con geometria.</p>');
   }
 
+  // ------------------------------------------------------------------ casi
+  function renderCases() {
+    var withOutputs = D.cases.filter(function (c) { return c.outputs; });
+    var box = document.getElementById("cases-table");
+    if (!withOutputs.length) {
+      box.innerHTML = '<p class="empty">Nessun report per caso: esegui lo stadio <b>process</b> ' +
+        '(il bat lo fa, oppure <span class="mono">--stage process</span>). Con ' +
+        '<span class="mono">--skip-process</span> la suite salta la corsa completa e resta veloce.</p>';
+      document.getElementById("cases-note").textContent = "";
+      return;
+    }
+    box.innerHTML = '<table><thead><tr><th>caso</th><th>dep N</th><th>drag N</th><th>L/D</th>' +
+      '<th>report</th><th>pdf / xlsx</th><th>immagini</th><th>AI</th></tr></thead><tbody>' +
+      withOutputs.map(function (c) {
+        var o = c.outputs || {};
+        var report = o.report ? '<a class="lnk" target="_blank" rel="noopener" href="' + o.report + '">apri report</a>' : "n/d";
+        var extra = [];
+        if (o.pdf) extra.push('<a class="lnk" target="_blank" rel="noopener" href="' + o.pdf + '">PDF</a>');
+        if (o.xlsx) extra.push('<a class="lnk" target="_blank" rel="noopener" href="' + o.xlsx + '">xlsx</a>');
+        if (o.markdown) extra.push('<a class="lnk" target="_blank" rel="noopener" href="' + o.markdown + '">md</a>');
+        var images = o.images ? ('<a class="lnk" target="_blank" rel="noopener" href="' + o.images_dir + '">' + o.images + '</a>') : "0";
+        return '<tr><td>' + c.id + '</td><td class="mono">' + fmt1(c.dep) + '</td><td class="mono">' +
+          fmt1(c.drag) + '</td><td class="mono good">' + fmt2(c.ld) + '</td><td>' + report + '</td><td>' +
+          (extra.join(" · ") || "n/d") + '</td><td class="mono">' + images + '</td><td>' +
+          (o.ai_used ? "sì" : "no") + '</td></tr>';
+      }).join("") + '</tbody></table>';
+    document.getElementById("cases-note").textContent =
+      withOutputs.length + " casi su " + D.cases.length + " hanno il report completo. " +
+      "I file stanno sotto cases/<caso>/ dentro la cartella dati; i link sono relativi e funzionano anche spostando la cartella.";
+  }
+
   // ---------------------------------------------------------------- method
   document.getElementById("chain").innerHTML = [
     ["Lettura .cas/.dat", "mesh, pressioni, sforzi (mmap, senza Fluent)"],
@@ -581,7 +625,7 @@ __FOOTER__
     "Estrai la geometria dei casi (stadio 1): con i profili, le misure del fondo diventano le variabili del modello.";
 
   // ------------------------------------------------------------------ boot
-  syncSelects(); renderScatter(); renderTable(); renderZones(); renderSynthesis(); renderGeometry();
+  syncSelects(); renderScatter(); renderTable(); renderZones(); renderSynthesis(); renderGeometry(); renderCases();
 })();
 </script>
 </body>

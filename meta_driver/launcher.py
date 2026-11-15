@@ -1563,6 +1563,33 @@ def run_postprocessing_session(config: dict, workspace_dir: str = None, force_me
     physics_data = real_extraction["physics_data"]
     zone_meshes = real_extraction["zone_meshes"]
 
+    # La geometria si calcola in OGNI corsa: cosi' la suite la trova gia' pronta
+    # accanto al report, senza rieseguire l'estrazione in un secondo passaggio.
+    geometry_payload = None
+    try:
+        from meta_driver.geometry import extract_geometry
+
+        _scale = float((bbox or {}).get("coord_scale_to_m") or 1.0)
+        _geometry = extract_geometry(zone_meshes, bbox or {}, coord_scale=_scale,
+                                     assembly=assembly_type,
+                                     half_car=bool(real_extraction.get("is_half_car_symmetric")))
+        geometry_payload = {
+            "case": os.path.splitext(os.path.basename(cas_file))[0],
+            "cas_file": cas_file,
+            "assembly": assembly_type,
+            "half_car": bool(real_extraction.get("is_half_car_symmetric")),
+            "bounding_box": bbox,
+            "summary": _geometry.get("summary") or {},
+            "geometry": _geometry,
+        }
+        log_fn("[GEOMETRIA] %d zone · fondo %s · ali %s/%s"
+               % (len(_geometry.get("zones") or []),
+                  "si" if (_geometry.get("floor") or {}).get("available") else "no",
+                  "si" if (_geometry.get("wings") or {}).get("front", {}).get("available") else "no",
+                  "si" if (_geometry.get("wings") or {}).get("rear", {}).get("available") else "no"))
+    except Exception as _exc:  # la geometria non deve mai bloccare il report
+        log_fn("[GEOMETRIA] non calcolata: %s" % _exc)
+
     target_pids = sorted({zid for z in cas_info.get("target_zones", []) for zid in z.get("zone_ids", [z["id"]])})
     target_names = sorted({rn for z in cas_info.get("target_zones", []) for rn in z.get("raw_names", [z["name"]])})
     hidden_zones = cas_info.get("domain_zones", []) + cas_info.get("other_aero_zones", [])
@@ -1665,6 +1692,7 @@ def run_postprocessing_session(config: dict, workspace_dir: str = None, force_me
         "exported_images": exported_images,
         "xcut_cp_gif": os.path.join(output_dir, "images_raw", "10_cp_xcut_progressive_sweep.gif"),
         "physics_data": physics_data,
+        "geometry": geometry_payload,
         # La configurazione effettiva viaggia col bundle: le fasi 2-4 (soglie,
         # diagnosi, report) leggono da qui invece di duplicare valori cablati.
         "config": config,
@@ -1673,5 +1701,9 @@ def run_postprocessing_session(config: dict, workspace_dir: str = None, force_me
     extracted_json = os.path.join(output_dir, "cfd_extracted_data.json")
     with open(extracted_json, "w", encoding="utf-8") as f:
         json.dump(session_bundle, f, indent=2)
+
+    if geometry_payload:
+        with open(os.path.join(output_dir, "geometry.json"), "w", encoding="utf-8") as f:
+            json.dump(geometry_payload, f, ensure_ascii=False, indent=2)
 
     return session_bundle

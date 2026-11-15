@@ -19,12 +19,14 @@ import csv
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime
 
 EXCLUSIONS_FILE = "escludi.txt"
 GEOM_DIR = "geom"
+CASES_DIR = "cases"
 SUITE_HTML = "Aero_Suite.html"
 GEOM_CSV = "dataset_geom.csv"
 TEMPLATE_NAME = "suite_template.html"
@@ -170,6 +172,153 @@ def stage_geometry(data_dir, exe, cases_root=None, force=False, timeout=900):
                  summary.get("expansion_ratio") or 0.0))
         done += 1
     print("geometria: %d nuovi, %d gia' presenti, %d errori" % (done, skipped, failed))
+    return done + skipped, failed
+
+
+def _collect_case_outputs(target_dir, case, case_dir=None):
+    """
+    Raccoglie cio' che la corsa completa ha prodotto in `cases/<caso>/`:
+    report HTML (anche quello standalone scritto accanto al caso), PDF, xlsx,
+    immagini e se l'AI Vision e' stata usata. Restituisce i link relativi al
+    dashboard, che sta nella radice della cartella dati.
+    """
+    html = ""
+    candidates = ["CFD_Aero_Diagnostic_Report.html"]
+    if case_dir and os.path.isdir(case_dir):
+        # il report standalone resta accanto al caso: non lo duplichiamo, lo
+        # usiamo solo se il report nella cartella di output manca
+        if not os.path.isfile(os.path.join(target_dir, candidates[0])):
+            for name in sorted(os.listdir(case_dir)):
+                if name.startswith("Report_CFD_") and name.endswith(".html"):
+                    try:
+                        shutil.copyfile(os.path.join(case_dir, name),
+                                        os.path.join(target_dir, "Report_standalone.html"))
+                        candidates.insert(0, "Report_standalone.html")
+                    except OSError:
+                        pass
+                    break
+    for name in candidates:
+        if os.path.isfile(os.path.join(target_dir, name)):
+            html = name
+            break
+    names = os.listdir(target_dir) if os.path.isdir(target_dir) else []
+    if not html and case_dir:
+        for name in sorted(os.listdir(case_dir)):
+            if name.lower().endswith(".html"):
+                html = ""
+                break
+    pdf = next((name for name in names if name.lower().endswith(".pdf")), "")
+    xlsx = next((name for name in names if name.lower().endswith(".xlsx")), "")
+    markdown = next((name for name in names if name.lower().endswith(".md")), "")
+    images_dir = os.path.join(target_dir, "images_raw")
+    images = 0
+    if os.path.isdir(images_dir):
+        images = sum(1 for name in os.listdir(images_dir)
+                     if name.lower().endswith((".png", ".jpg", ".jpeg", ".gif")))
+    ai_used = False
+    if html:
+        try:
+            text = open(os.path.join(target_dir, html), encoding="utf-8", errors="ignore").read(400000)
+            low = text.lower()
+            # il report scrive esplicitamente se l'AI e' stata usata o no
+            if "ai vision non usata" in low or "ai vision non utilizzata" in low:
+                ai_used = False
+            else:
+                ai_used = ("ai vision" in low) or ("deepseek" in low) or ("perizia ai" in low)
+        except OSError:
+            pass
+    prefix = "cases/%s/" % case["id"]
+    return {
+        "case": case["id"],
+        "html": html,
+        "report": prefix + html if html else "",
+        "pdf": prefix + pdf if pdf else "",
+        "xlsx": prefix + xlsx if xlsx else "",
+        "markdown": prefix + markdown if markdown else "",
+        "images": images,
+        "images_dir": prefix + "images_raw/" if images else "",
+        "ai_used": ai_used,
+    }
+
+
+def stage_process(data_dir, exe, cases_root=None, force=False, no_meta=False,
+                  only=None, timeout=3600):
+    """
+    Corsa COMPLETA dell'app per ogni caso: mesh, forze, immagini, META,
+    report HTML (e PDF/xlsx), AI Vision se configurata. Gli output vengono
+    spostati in `cases/<caso>/`, il report standalone copiato, e la geometria
+    gia' calcolata dalla corsa finisce in `geom/<caso>.json`.
+    """
+    cases = load_cases(data_dir)
+    cases_dir = os.path.join(data_dir, CASES_DIR)
+    os.makedirs(cases_dir, exist_ok=True)
+    geom_dir = os.path.join(data_dir, GEOM_DIR)
+    os.makedirs(geom_dir, exist_ok=True)
+    done = skipped = failed = 0
+    for case in cases:
+        if only and case["id"] not in only:
+            continue
+        target = os.path.join(cases_dir, case["id"])
+        marker = os.path.join(target, "case_outputs.json")
+        if os.path.isfile(marker) and not force:
+            skipped += 1
+            continue
+        directory = case_directory(data_dir, case)
+        if directory is None and cases_root:
+            candidate = os.path.join(cases_root, case["id"])
+            if os.path.isdir(candidate):
+                directory = candidate
+        if directory is None:
+            print("  %-24s cartella del caso non trovata (usa --cases-root)" % case["id"])
+            failed += 1
+            continue
+        command = [exe, "-w", directory]
+        if case.get("assembly"):
+            command.extend(["--assembly", case["assembly"]])
+        if no_meta:
+            command.append("--no-meta-batch")
+        try:
+            result = subprocess.run(command, capture_output=True, text=True,
+                                    errors="replace", timeout=timeout)
+            output = (result.stdout or "") + (result.stderr or "")
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            print("  %-24s errore: %s" % (case["id"], exc))
+            failed += 1
+            continue
+        produced = os.path.join(directory, "output_diagnostics")
+        if not os.path.isdir(produced):
+            print("  %-24s nessun output prodotto" % case["id"])
+            for line in output.splitlines()[-4:]:
+                print("        " + line.strip())
+            failed += 1
+            continue
+        if os.path.isdir(target):
+            shutil.rmtree(target)
+        try:
+            shutil.move(produced, target)
+        except OSError:
+            shutil.copytree(produced, target)
+            shutil.rmtree(produced, ignore_errors=True)
+        manifest = _collect_case_outputs(target, case, directory)
+        with open(marker, "w", encoding="utf-8") as handle:
+            json.dump(manifest, handle, ensure_ascii=False, indent=1)
+        geometry_source = os.path.join(target, "geometry.json")
+        if os.path.isfile(geometry_source):
+            try:
+                payload = json.load(open(geometry_source, encoding="utf-8"))
+                payload.update({"dep": case["dep"], "drag": case["drag"], "ld": case["ld"],
+                                "wing": case["wing"], "diff": case["diff"]})
+                with open(os.path.join(geom_dir, case["id"] + ".json"), "w",
+                          encoding="utf-8") as handle:
+                    json.dump(payload, handle, ensure_ascii=False, indent=1)
+            except (OSError, ValueError):
+                pass
+        print("  %-24s %s · %d immagini%s"
+              % (case["id"], manifest["html"] or "report non trovato", manifest["images"],
+                 " · AI" if manifest["ai_used"] else ""))
+        done += 1
+    print("report completi: %d eseguiti, %d gia' presenti, %d errori"
+          % (done, skipped, failed))
     return done + skipped, failed
 
 
@@ -400,9 +549,20 @@ def build_dashboard_payload(data_dir, tools_dir=None):
     }
     if synthesis.get("available"):
         synthesis["families"] = _family_packages(synthesis)
-    cases = [{"id": c["id"], "dep": c["dep"], "drag": c["drag"], "ld": c["ld"],
-              "cop": c.get("cop"), "iter": c.get("iter") or "", "wing": c.get("wing") or "",
-              "diff": c.get("diff") or ""} for c in raw_cases]
+    cases = []
+    for case in raw_cases:
+        manifest = {}
+        path = os.path.join(data_dir, CASES_DIR, case["id"], "case_outputs.json")
+        if os.path.isfile(path):
+            try:
+                manifest = json.load(open(path, encoding="utf-8"))
+            except (OSError, ValueError):
+                manifest = {}
+        cases.append({"id": case["id"], "dep": case["dep"], "drag": case["drag"],
+                      "ld": case["ld"], "cop": case.get("cop"),
+                      "iter": case.get("iter") or "", "wing": case.get("wing") or "",
+                      "diff": case.get("diff") or "",
+                      "outputs": manifest or None})
     best = max((c for c in raw_cases if c["dep"] is not None), key=lambda c: c["dep"], default=None)
     best_ld = max((c for c in raw_cases if c["ld"] is not None), key=lambda c: c["ld"], default=None)
     return {
@@ -410,6 +570,7 @@ def build_dashboard_payload(data_dir, tools_dir=None):
         "noise_n": noise,
         "excluded": explorer.get("excluded") or sorted(load_exclusions(data_dir)),
         "counts": {"cases": len(cases), "geom": len(geometries),
+                   "reports": sum(1 for case in cases if case.get("outputs")),
                    "zones": len({zone for mapping in explorer.get("zones", {}).values()
                                  for zone in mapping})},
         "cases": cases,
@@ -480,12 +641,17 @@ def main():
     parser = argparse.ArgumentParser(description="Aero Suite: un processo, un report.")
     parser.add_argument("--data", required=True, help="cartella _dati_batch")
     parser.add_argument("--stage", default="all",
-                        choices=["geometry", "tables", "dashboard", "all"])
+                        choices=["process", "geometry", "tables", "dashboard", "all"])
     parser.add_argument("--exe", default=None, help="FS-MetaPostDiag.exe per la geometria")
     parser.add_argument("--cases-root", default=None,
                         help="cartella con le sottocartelle dei casi (se i percorsi salvati non esistono)")
     parser.add_argument("--tools", default=None, help="cartella con design_explorer.py e recombination.py")
-    parser.add_argument("--force", action="store_true", help="rifai la geometria anche se presente")
+    parser.add_argument("--force", action="store_true", help="rifai anche cio' che e' gia' presente")
+    parser.add_argument("--skip-process", action="store_true",
+                        help="non eseguire i report completi (solo geometria veloce, tabelle, dashboard)")
+    parser.add_argument("--no-meta", action="store_true",
+                        help="salta il rendering META nel report completo (piu' veloce)")
+    parser.add_argument("--only", default=None, help="solo questi casi (separati da virgola)")
     args = parser.parse_args()
 
     data_dir = os.path.abspath(args.data)
@@ -500,8 +666,22 @@ def main():
 
     print("Aero Suite — dati: %s" % data_dir)
     failures = 0
+    only = [name.strip() for name in (args.only or "").split(",") if name.strip()] or None
+    run_all = args.stage in ("all",)
+    if run_all and not args.skip_process:
+        print("\n[1/4] report completi per ogni caso")
+        _total, failed = stage_process(data_dir, exe, args.cases_root, args.force,
+                                       args.no_meta, only, timeout=3600)
+        failures += failed
+    if args.stage == "process":
+        print("\n[1/4] report completi per ogni caso")
+        _total, failed = stage_process(data_dir, exe, args.cases_root, args.force,
+                                       args.no_meta, only, timeout=3600)
+        failures += failed
+        print("\nFatto. Apri: %s" % os.path.join(data_dir, SUITE_HTML))
+        return 0 if failures == 0 else 3
     if args.stage in ("geometry", "all"):
-        print("\n[1/3] geometria dalla mesh")
+        print("\n[2/4] geometria dalla mesh")
         if not os.path.isfile(exe):
             print("  eseguibile non trovato: %s" % exe)
             failures += 1
@@ -509,10 +689,10 @@ def main():
             _total, failed = stage_geometry(data_dir, exe, args.cases_root, args.force)
             failures += failed
     if args.stage in ("tables", "all"):
-        print("\n[2/3] tabelle")
+        print("\n[3/4] tabelle")
         stage_tables(data_dir)
     if args.stage in ("dashboard", "all"):
-        print("\n[3/3] dashboard")
+        print("\n[4/4] dashboard")
         stage_dashboard(data_dir, args.tools)
     print("\nFatto. Apri: %s" % os.path.join(data_dir, SUITE_HTML))
     return 0 if failures == 0 else 3

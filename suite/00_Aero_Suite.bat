@@ -46,7 +46,17 @@ echo.
 echo Dati: %DATA%
 echo Exe : %EXE%
 echo.
-%PY% aero_suite.py --data "%DATA%" --exe "%EXE%" --tools "..\tools" --stage all
+set "SKIP="
+echo.
+echo I report completi (immagini META, report HTML/PDF, AI se configurata) richiedono
+echo circa 1-2 minuti per caso. Puoi saltarli per la sola analisi dati.
+set /p "FULL=Eseguire i report completi per ogni caso? (S/n): "
+if /i "%FULL%"=="n" set "SKIP=--skip-process"
+echo.
+set /p "NOMETA=Saltare il rendering META (piu' veloce, immagini solo dai grafici)? (s/N): "
+if /i "%NOMETA%"=="s" set "SKIP=%SKIP% --no-meta"
+echo.
+%PY% aero_suite.py --data "%DATA%" --exe "%EXE%" --tools "..\tools" --stage all %SKIP%
 if errorlevel 3 goto partial
 echo.
 echo Apro l'Aero Suite...

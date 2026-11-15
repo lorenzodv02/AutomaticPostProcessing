@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.16.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.17.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.16.0
+python main.py --version      # FS-MetaPostDiag 1.17.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,15 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.17.0 — La suite fa tutto: report completi per ogni caso
+
+La suite non si ferma più alla geometria: esegue **l'intera pipeline** di post-processing per ogni caso e la colleziona.
+
+- **stadio `process`**: per ogni caso lancia l'app completa (mesh, forze, immagini, META, report HTML/PDF, xlsx, AI Vision se configurata) e sposta gli output in `cases/<caso>/`, copiando anche il report standalone scritto accanto al caso;
+- **geometria gratis**: la corsa completa scrive già `geometry.json` (il launcher calcola la geometria di ogni assieme anche nei report normali), quindi lo stadio geometria non riesegue l'estrazione;
+- **nuova scheda "Casi e report"** nel dashboard: per ogni caso il link al report HTML, PDF/xlsx, numero di immagini e se l'AI Vision è stata usata;
+- **opzioni**: `--skip-process` (solo analisi dati, veloce), `--no-meta` (salta il rendering META), `--only CASO`, `--force`; il bat chiede se eseguire i report completi e se saltare META.
 
 ### v1.16.0 — Geometria di ogni assieme, non solo il fondo
 

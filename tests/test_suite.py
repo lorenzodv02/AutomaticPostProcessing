@@ -218,3 +218,45 @@ def test_family_packages_from_synthesis():
     assert names == ["Solo ala anteriore", "Solo ala posteriore", "Solo fondo"]
     assert packages[0]["gain"] == 24.0 and packages[0]["zones"] == 1
     assert all(p["family"] != "gomme" for p in packages)
+
+
+def test_collect_case_outputs_discovers_report_images_and_ai():
+    folder = tempfile.mkdtemp(prefix="suite_")
+    try:
+        _build(folder, _cases())
+        case = {"id": "a", "dep": 500.0, "drag": 220.0, "ld": 2.27}
+        target = os.path.join(folder, "cases", "a")
+        os.makedirs(os.path.join(target, "images_raw"))
+        open(os.path.join(target, "CFD_Aero_Diagnostic_Report.html"), "w",
+             encoding="utf-8").write("<html>AI Vision: perizia</html>")
+        open(os.path.join(target, "Tabella.xlsx"), "wb").write(b"xlsx")
+        open(os.path.join(target, "images_raw", "01.png"), "wb").write(b"png")
+        open(os.path.join(target, "images_raw", "02.png"), "wb").write(b"png")
+        manifest = suite._collect_case_outputs(target, case)
+        assert manifest["html"] == "CFD_Aero_Diagnostic_Report.html"
+        assert manifest["report"] == "cases/a/CFD_Aero_Diagnostic_Report.html"
+        assert manifest["xlsx"] == "cases/a/Tabella.xlsx"
+        assert manifest["images"] == 2
+        assert manifest["ai_used"] is True
+        json.dump(manifest, open(os.path.join(target, "case_outputs.json"), "w",
+                                 encoding="utf-8"))
+        payload = suite.build_dashboard_payload(folder, os.path.join(REPO, "tools"))
+        case_payload = next(c for c in payload["cases"] if c["id"] == "a")
+        assert case_payload["outputs"]["report"].endswith(".html")
+        assert payload["counts"]["reports"] == 1
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_stage_process_skips_existing_cases():
+    folder = tempfile.mkdtemp(prefix="suite_")
+    try:
+        _build(folder, _cases())
+        target = os.path.join(folder, "cases", "a")
+        os.makedirs(target)
+        json.dump({"case": "a"}, open(os.path.join(target, "case_outputs.json"), "w"))
+        total, failed = suite.stage_process(folder, exe="nonexistent.exe", only=["a"])
+        assert failed == 0
+        assert total == 1
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
