@@ -1110,8 +1110,30 @@ class AeroDiagnosticsGUI:
 # ==============================================================================
 #  ENTRYPOINT GUI
 # ==============================================================================
+def _apply_window_icon(root):
+    """
+    Imposta l'icona della finestra da `assets/FS-MetaPostDiag.ico`.
+
+    Funziona sia dai sorgenti sia dall'eseguibile PyInstaller (dove le risorse
+    stanno in sys._MEIPASS). Su piattaforme che non supportano il formato .ico
+    l'errore viene ignorato: l'icona e' estetica, non deve impedire l'avvio.
+    """
+    try:
+        from config_bridge import app_dir, bundled_dir
+
+        for base in (bundled_dir(), app_dir()):
+            icon_path = os.path.join(base, "assets", "FS-MetaPostDiag.ico")
+            if os.path.isfile(icon_path):
+                root.iconbitmap(default=icon_path)
+                return icon_path
+    except Exception:
+        return None
+    return None
+
+
 def launch_gui(config: dict, pipeline_runner_fn):
     root = tk.Tk()
+    _apply_window_icon(root)
     AeroDiagnosticsGUI(root, config, pipeline_runner_fn)
     root.mainloop()
 

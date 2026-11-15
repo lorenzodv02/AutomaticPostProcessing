@@ -38,3 +38,25 @@ def test_spec_builds_console_onefile():
 def test_spec_excludes_test_tooling():
     spec = _spec()
     assert "pytest" in spec
+
+
+def test_spec_uses_the_icon():
+    """L'exe deve avere l'icona del team, non quella generica di PyInstaller."""
+    spec = _spec()
+    assert "assets/FS-MetaPostDiag.ico" in spec
+    assert "icon=None" not in spec
+
+
+def test_icon_file_is_a_valid_multi_size_ico():
+    """Controllo del formato ICO senza dipendenze (Pillow non e' in CI)."""
+    import struct
+
+    icon_path = os.path.join(REPO_ROOT, "assets", "FS-MetaPostDiag.ico")
+    assert os.path.isfile(icon_path)
+    with open(icon_path, "rb") as handle:
+        header = handle.read(6)
+    reserved, kind, count = struct.unpack("<HHH", header)
+    assert reserved == 0, reserved
+    assert kind == 1, ("non e' un ICO", kind)
+    assert count >= 5, ("misure dichiarate", count)
+    assert os.path.isfile(os.path.join(REPO_ROOT, "assets", "FS-MetaPostDiag.png"))

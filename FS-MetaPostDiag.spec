@@ -14,6 +14,8 @@ sessione `.ses` generata punterebbe a un file inesistente.
 datas = [
     ("config.yaml", "."),
     ("meta_driver/meta_post_worker.py", "meta_driver"),
+    # Icona della finestra Tkinter (quella dell'exe la imposta `icon=` qui sotto)
+    ("assets/FS-MetaPostDiag.ico", "assets"),
 ]
 
 a = Analysis(
@@ -48,5 +50,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon="assets/FS-MetaPostDiag.ico",
 )
