@@ -2,7 +2,8 @@
 """
 Generatore del Report Diagnostico Aerodinamico Interattivo HTML/PDF e Markdown (report_builder.py).
 Include:
-  - Sezione di Audit e Verifica Rigorosa Dati (`verification_report`: CHK-01 .. CHK-06)
+  - Sezione di Audit e Verifica Rigorosa Dati (`verification_report`: CHK-01 .. CHK-07,
+    dove CHK-07 verifica che i totali coincidano con la somma dei PID)
   - Tabella Quantitativa per Singolo PID (`pid_breakdown`: area, facce, forze, Cp_min, stallo %)
   - KPI Aerodinamici estratti da .cas e .dat (con supporto Half-Car Symmetry)
   - Schede delle Problematiche di Design (CRITICAL, WARNING, INFO) basate sui dati reali
