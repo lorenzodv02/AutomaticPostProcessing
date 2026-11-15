@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.20.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.20.1-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.20.0
+python main.py --version      # FS-MetaPostDiag 1.20.1
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,11 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.20.1 — Launcher grafico: import pigro (CI verde)
+
+- `gui_launcher` importa i widget di brand (`gui_app`) solo all'apertura della finestra: a livello di modulo bastano `brand` e `tkinter`. Così il modulo si importa anche dove `matplotlib` non c'è (CI) e i test GUI non rompono la raccolta.
+- Il test della finestra salta se non ci sono display/Tk; gli altri test coprono piano batch e tempi anche senza GUI.
 
 ### v1.20.0 — Launcher e batch grafici, con il brand di squadra
 

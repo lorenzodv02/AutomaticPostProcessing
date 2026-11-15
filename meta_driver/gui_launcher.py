@@ -29,7 +29,14 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 import brand
-from gui_app import GradientButton, _BrandBars
+
+
+def _ui_components():
+    """Importa i widget di brand solo quando serve (matplotlib non e' una
+    dipendenza dei test: l'import a livello di modulo romperebbe la CI)."""
+    from gui_app import GradientButton, _BrandBars
+
+    return GradientButton, _BrandBars
 
 
 def _families():
@@ -138,6 +145,7 @@ class LauncherApp:
         self.root.geometry("1060x820")
         self.root.minsize(940, 720)
         self.root.configure(bg=brand.NAVY_DEEP)
+        self._GradientButton, self._BrandBars = _ui_components()
         self._build()
         self._show_mode("single")
         self.root.after(120, self._poll)
@@ -156,7 +164,7 @@ class LauncherApp:
         tk.Label(titles, text="Launcher  ·  UniNa Corse  ·  Aerodynamics & Cooling",
                  bg=brand.NAVY_DEEP, fg=brand.TEXT_MUTED,
                  font=(FONT_UI, 10)).pack(anchor="w")
-        _BrandBars(head, width=150, height=46).pack(side="right")
+        self._BrandBars(head, width=150, height=46).pack(side="right")
         tk.Frame(self.root, bg=brand.GOLD, height=3).pack(fill="x", padx=26, pady=(8, 12))
 
         modes = tk.Frame(self.root, bg=brand.NAVY_DEEP)
@@ -293,7 +301,7 @@ class LauncherApp:
         self._folder_row(body, "Cartella del caso", "single_dir")
         self._check(body, "Salta il rendering META (più veloce)", "single_skip_meta")
         self._check(body, "Apri il report alla fine", "single_open_report", default=True)
-        GradientButton(body, text="Avvia analisi", command=self._start_single,
+        self._GradientButton(body, text="Avvia analisi", command=self._start_single,
                        width=240, height=42).pack(anchor="w", pady=(8, 2))
         return card
 
@@ -320,7 +328,7 @@ class LauncherApp:
         menu.pack(side="left")
         self._check(body, "Rifai anche i casi già fatti", "batch_force")
         self._check(body, "Genera anche i report completi per ogni caso", "batch_full")
-        GradientButton(body, text="Avvia batch", command=self._start_batch,
+        self._GradientButton(body, text="Avvia batch", command=self._start_batch,
                        width=240, height=42).pack(anchor="w", pady=(8, 2))
 
         table_card = self._card(wrapper, "Casi in elaborazione", expand=True)
@@ -344,7 +352,7 @@ class LauncherApp:
         self._folder_row(body, "Cartella dati", "suite_dir")
         self._check(body, "I report completi per caso sono già stati fatti",
                     "suite_reports_done", default=True)
-        GradientButton(body, text="Avvia suite", command=self._start_suite,
+        self._GradientButton(body, text="Avvia suite", command=self._start_suite,
                        width=240, height=42).pack(anchor="w", pady=(8, 2))
         return card
 
@@ -353,7 +361,7 @@ class LauncherApp:
                                      "superfici per famiglia. Nessun report.")
         body = self._inner(card)
         self._folder_row(body, "Cartella del caso", "geometry_dir")
-        GradientButton(body, text="Calcola geometria", command=self._start_geometry,
+        self._GradientButton(body, text="Calcola geometria", command=self._start_geometry,
                        width=240, height=42).pack(anchor="w", pady=(8, 2))
         return card
 
