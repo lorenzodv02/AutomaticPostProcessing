@@ -30,7 +30,9 @@ from analyzer.ai_vision_advisor import generate_ai_vision_commentary
 from reporting.report_builder import build_diagnostic_reports
 from config_bridge import load_config as load_config_file
 from config_bridge import validate_config
-from file_discovery import NoCaseFilesFound
+from file_discovery import NoCaseFilesFound, try_discover
+from meta_driver.fluent_parser import extract_real_mesh_and_cfd_data
+from meta_driver.geometry import floor_profile, summarize
 from version import __version__
 
 # Percorso del config.yaml effettivamente usato (None = default interni)
@@ -145,6 +147,62 @@ def execute_full_diagnostic_pipeline(config: dict, workspace_dir: str = None, lo
     }
 
 
+def _run_geometry_only(cfg: dict, args) -> int:
+    """
+    Estrazione della sola geometria del fondo dalla mesh del .cas.
+
+    Scrive `output_diagnostics/geometry.json` accanto ai file del caso: la usa
+    la suite per confrontare i profili senza rifare immagini e report.
+    """
+    import json as _json
+
+    workspace = args.workspace or (cfg.get("project") or {}).get("workspace_dir") or os.getcwd()
+    cas_file, dat_file, discovery_error = try_discover(workspace)
+    if not cas_file:
+        print("[GEOMETRIA] nessun file .cas in: %s%s"
+              % (workspace, (" (" + discovery_error + ")") if discovery_error else ""))
+        return 2
+    print("[GEOMETRIA] caso: %s" % os.path.basename(cas_file))
+    assembly = args.assembly or (cfg.get("project") or {}).get("assembly_type") or "undertray"
+    convention = ((cfg.get("reference_values") or {}).get("report_force_convention") or "lift")
+    data = extract_real_mesh_and_cfd_data(
+        cas_path=cas_file, dat_path=dat_file, assembly_type=assembly,
+        ref_values=cfg.get("reference_values", {}), config=cfg,
+        force_convention=convention, log_fn=lambda message: None,
+    )
+    bbox = data.get("bounding_box") or {}
+    scale = float(bbox.get("coord_scale_to_m") or 1.0)
+    profile = floor_profile(data.get("zone_meshes") or {}, bbox, coord_scale=scale)
+    payload = {
+        "case": os.path.splitext(os.path.basename(cas_file))[0],
+        "cas_file": cas_file,
+        "assembly": assembly,
+        "bounding_box": bbox,
+        "summary": summarize(profile),
+        "geometry": profile,
+    }
+    output_dir = os.path.join(workspace, "output_diagnostics")
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(output_dir, "geometry.json")
+    with open(path, "w", encoding="utf-8") as handle:
+        _json.dump(payload, handle, ensure_ascii=False, indent=2)
+    if not profile.get("available"):
+        print("[GEOMETRIA] non disponibile: %s" % profile.get("reason"))
+        return 1
+    ramp = profile.get("ramp") or {}
+    indexes = profile.get("x_m") or [0.0]
+    position = min(int(profile.get("throat_pct", 0) / 100.0 * (len(indexes) - 1)), len(indexes) - 1)
+    print("[GEOMETRIA] fondo: %.2f..%.2f m | altezza minima %.1f mm al %.0f%% | "
+          "%s %.1f deg su %.2f m | espansione %.2f | area %.3f m2"
+          % (profile["x_range_m"][0], profile["x_range_m"][1],
+             (profile.get("h_min_m") or [0.0])[position] * 1000.0,
+             profile.get("throat_pct", 0.0), ramp.get("kind") or "tratto in salita",
+             ramp.get("angle_deg") or 0.0, ramp.get("length_m") or 0.0,
+             profile.get("expansion_ratio") or 0.0, profile.get("floor_area_m2") or 0.0))
+    print("[GEOMETRIA] scritto: %s" % path)
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Post-Processing CFD Verificato & Diagnostica Design attraverso BETA CAE META Post (Formula Student)"
@@ -188,6 +246,8 @@ def main():
     )
     parser.add_argument("--gui", action="store_true", help="Avvia l'interfaccia grafica desktop")
     parser.add_argument("--open-report", action="store_true", help="Apre automaticamente il report HTML nel browser")
+    parser.add_argument("--geometry-only", action="store_true",
+                        help="Estrae solo la geometria del fondo dalla mesh (.cas) e scrive output_diagnostics/geometry.json, senza immagini ne report")
 
     args = parser.parse_args()
     cfg = load_config(args.config)
@@ -252,6 +312,9 @@ def main():
             print("[AI-CHECK] suggerimenti: verifica che la chiave sia di platform.deepseek.com, "
                   "che il modello sia tra quelli elencati e che l'account abbia credito.")
         return 0
+
+    if args.geometry_only:
+        return _run_geometry_only(cfg, args)
 
     if args.gui or _launch_gui_by_default(len(sys.argv)):
         from gui_app import launch_gui

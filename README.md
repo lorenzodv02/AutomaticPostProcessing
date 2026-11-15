@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.13.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.14.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.13.0
+python main.py --version      # FS-MetaPostDiag 1.14.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,14 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.14.0 — Aero Suite e geometria dalla mesh
+
+Tre pezzi nuovi che chiudono il cerchio:
+
+- **`--geometry-only`**: l'app legge i triangoli delle zone del fondo direttamente dal `.cas` e scrive `geometry.json` — profilo altimetrico, altezza minima, tratto in salita (diffusore o cascata, con angolo), espansione, area in pianta e area della superficie. Nessuna misura manuale.
+- **`suite/aero_suite.py` + `00_Aero_Suite.bat`**: un comando per *geometria → tabelle → report*. Per ogni caso lancia l'exe, raccoglie `geom/<caso>.json`, costruisce `dataset_geom.csv` con le correlazioni geometria-prestazioni, genera Explorer e Recombination e una pagina indice **Aero_Suite.html** con i profili del fondo in scala comune.
+- **Geometria verificata sul caso reale FW5**: fondo 1,65–3,35 m, altezza minima 37,9 mm, tratto in salita 50,6° (gradino/cascata, non diffusore: il codice lo distingue), espansione 6,73, area del fondo 1,105 m², 117.040 triangoli letti.
 
 ### v1.13.0 — Aero Recombination Engine
 

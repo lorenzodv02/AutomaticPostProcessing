@@ -19,6 +19,8 @@ MODULES = (
     "tests.test_batch_scripts",
     "tests.test_design_explorer",
     "tests.test_recombination",
+    "tests.test_geometry",
+    "tests.test_suite",
     "tests.test_config_bridge",
     "tests.test_parser_synthetic",
     "tests.test_rules_thresholds",

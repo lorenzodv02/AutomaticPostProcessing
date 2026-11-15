@@ -1,0 +1,60 @@
+Aero Suite — geometria, tabelle, report
+======================================
+
+Un solo comando per: estrarre la geometria del fondo dalla mesh del `.cas`,
+costruire le tabelle, generare Aero Design Explorer e Aero Recombination Engine,
+e una pagina indice che collega tutto.
+
+Cosa serve
+----------
+    suite\
+        00_Aero_Suite.bat
+        aero_suite.py
+        FS-MetaPostDiag.exe      <- mettilo qui (o indica il percorso)
+    tools\
+        design_explorer.py
+        recombination.py
+        explorer_template.html
+        recombination_template.html
+    _dati_batch\                 <- la cartella prodotta dal batch
+        dataset.csv, dataset_pid.csv, *.json, escludi.txt
+
+Python 3.8+ (solo libreria standard: nessuna installazione di pacchetti).
+
+Uso
+---
+1. Doppio clic su `00_Aero_Suite.bat`, trascina la cartella `_dati_batch`.
+2. Il bat fa tre passi:
+   - **geometria**: per ogni caso lancia `FS-MetaPostDiag.exe --geometry-only`
+     e salva `geom\<caso>.json` nella cartella dati;
+   - **tabelle**: produce `dataset_geom.csv` (profilo, altezza minima, angolo
+     del tratto in salita, espansione, aree) e le correlazioni geometria/forze;
+   - **report**: genera `Aero_Design_Explorer.html`, `Aero_Recombination.html`
+     e `Aero_Suite.html` con i profili in scala comune.
+3. Si apre `Aero_Suite.html`.
+
+Da riga di comando:
+
+    python aero_suite.py --data "D:\Analisi\_dati_batch" --exe .\FS-MetaPostDiag.exe
+    python aero_suite.py --data "..." --stage geometry --force
+    python aero_suite.py --data "..." --stage tables
+    python aero_suite.py --data "..." --stage reports --tools ..\tools
+
+Cosa esce
+---------
+    geom\<caso>.json      profilo del fondo, zone, metriche (dalla mesh)
+    dataset_geom.csv      una riga per caso con geometria + forze
+    Aero_Suite.html       pagina indice: report, profili, tabella, correlazioni
+    Aero_Design_Explorer.html
+    Aero_Recombination.html
+
+Note
+----
+- La geometria si legge **solo dal .cas**: nessuna tabella da compilare.
+- Il profilo è la superficie più bassa a ogni X: se una zona ha anche pareti
+  laterali o un labbro posteriore, il profilo ne risente. Per questo il report
+  riporta anche la "ladder" delle zone con estensione in X, Y e area.
+- Il "tratto in salita" viene classificato: oltre 35° è un gradino/cascata e non
+  un diffusore.
+- Le correlazioni con 15-20 casi servono a scegliere la prossima simulazione,
+  non a dimostrare una legge.
