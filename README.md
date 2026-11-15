@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.11.4-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.12.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.11.4
+python main.py --version      # FS-MetaPostDiag 1.12.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,18 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.12.0 — Aero Design Explorer
+
+Un report interattivo autonomo che legge il dataset del batch e lo trasforma in decisioni di progetto. `tools/design_explorer.py` (solo libreria standard) produce un singolo HTML con:
+
+- **mappa dei modelli**: deportanza vs resistenza, frontiera di Pareto, punti cliccabili;
+- **tabella ordinabile** dei casi con iterazioni, configurazione e modello;
+- **confronto per zona** tra due casi qualsiasi: dove si guadagna e dove si perde, con le zone presenti in uno solo dei due;
+- **cosa i dati permettono**: modello lineare con validazione leave-one-out (λ scelto sul LOO), effetto stimato dei parametri, copertura dello spazio di progetto;
+- **cinque simulazioni da fare adesso**, scelte per riempire i vuoti dello spazio (massima distanza dai casi esistenti, non previsioni).
+
+Sul dataset reale (17 casi): deportanza RMSE leave-one-out **30,6 N** (31× il rumore di 1,05 N) → il report dichiara che i dati non sostengono una previsione di dettaglio; resistenza RMSE 5,7 N (R² 0,95). Frontiera di Pareto con V9 in testa e D8 come miglior compromesso.
 
 ### v1.11.4 — esclusione tracciabile dei casi non validi
 

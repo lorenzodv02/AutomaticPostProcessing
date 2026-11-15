@@ -1,0 +1,43 @@
+Aero Design Explorer
+====================
+
+Trasforma il dataset estratto dal batch in un report interattivo da aprire nel
+browser: mappa dei modelli, tabella, confronto per zona, verifica del modello,
+proposte di prossime simulazioni.
+
+Requisiti
+---------
+Solo Python 3.8 o superiore (nessuna libreria da installare).
+
+Uso
+---
+    python design_explorer.py --data "D:\Analisi\_dati_batch"
+
+Produce `Aero_Design_Explorer.html` nella stessa cartella. Opzioni:
+
+    --out FILE.html     percorso del report
+    --template FILE     template alternativo (default: explorer_template.html)
+
+La cartella dei dati deve contenere:
+    dataset.csv         una riga per caso (prodotto da make_tables.py)
+    dataset_pid.csv     una riga per zonaPID (prodotto da make_tables.py)
+    metadata.csv        parametri e note per caso (opzionale ma decisivo)
+    escludi.txt         casi da ignorare (opzionale)
+
+Cosa contiene il report
+-----------------------
+1. Mappa dei modelli: deportanza vs resistenza, frontiera di Pareto.
+2. Tabella ordinabile di tutti i casi (iterazioni, ala, diffusore, modello).
+3. Confronto per zona tra due casi: dove si guadagna e dove si perde, con
+   l'indicazione delle zone presenti in uno solo dei due.
+4. Cosa dicono i dati: modello lineare con validazione leave-one-out (errore
+   onesto), effetto stimato dei parametri, copertura dello spazio di progetto
+   e cinque combinazioni mai provate da simulare per prime.
+
+Note
+----
+- Il modello è li' per dire cosa i dati permettono, non per sostituire la CFD:
+  se l'errore leave-one-out è molto più grande del rumore di misura, il report
+  lo scrive esplicitamente.
+- Le proposte sono scelte per riempire i vuoti dello spazio (massima distanza
+  dai casi esistenti), non sono previsioni di prestazione.

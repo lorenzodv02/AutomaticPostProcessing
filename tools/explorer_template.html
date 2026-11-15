@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aero Design Explorer — UniNa Corse</title>
+<style>
+  :root {
+    --bg: #07131f;
+    --surface: #0d2133;
+    --surface-2: #10283d;
+    --border: rgba(255,255,255,0.09);
+    --text: #e8f1f7;
+    --muted: #8fa8b8;
+    --accent: #fdeb19;
+    --accent-2: #ff7a76;
+    --good: #4ade80;
+    --info: #38bdf8;
+    --mono: "Cascadia Mono", "Consolas", "Roboto Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: radial-gradient(1200px 600px at 15% -10%, #10283d 0%, var(--bg) 55%);
+    color: var(--text); font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.5; padding: 28px 32px 60px;
+  }
+  header { max-width: 1220px; margin: 0 auto 22px; }
+  .kicker { color: var(--accent); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; font-weight: 700; }
+  h1 { margin: 6px 0 4px; font-size: 34px; font-weight: 800; letter-spacing: -0.5px; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 14px; max-width: 780px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip { background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+          padding: 5px 12px; font-size: 12px; color: var(--muted); }
+  .chip b { color: var(--text); font-family: var(--mono); }
+  main { max-width: 1220px; margin: 0 auto; }
+  .card { background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)), var(--surface);
+          border: 1px solid var(--border); border-radius: 16px; padding: 20px 22px; margin-bottom: 18px; }
+  .card h2 { margin: 0 0 4px; font-size: 18px; font-weight: 700; }
+  .card h2 .num { color: var(--accent); font-family: var(--mono); margin-right: 8px; }
+  .card p.hint { margin: 2px 0 16px; color: var(--muted); font-size: 12.5px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .stat { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .stat .label { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .stat .value { font-family: var(--mono); font-size: 26px; font-weight: 700; margin-top: 2px; }
+  .stat .unit { font-size: 13px; color: var(--muted); margin-left: 4px; }
+  .stat .note { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .accent { color: var(--accent); }
+  .good { color: var(--good); }
+  .warn { color: var(--accent-2); }
+  .info { color: var(--info); }
+  svg text { fill: var(--muted); font-size: 11px; font-family: var(--mono); }
+  svg .axis { stroke: rgba(255,255,255,0.16); stroke-width: 1; }
+  svg .grid { stroke: rgba(255,255,255,0.06); stroke-width: 1; }
+  svg .point { cursor: pointer; transition: r .12s ease; }
+  svg .point:hover { r: 8; }
+  svg .label { fill: var(--text); font-family: var(--mono); font-size: 10.5px; pointer-events: none; }
+  svg .pareto { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 4; opacity: .85; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { padding: 7px 8px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; font-size: 10.5px; letter-spacing: .06em;
+       text-transform: uppercase; cursor: pointer; user-select: none; white-space: nowrap; }
+  th:hover { color: var(--accent); }
+  td.mono, th.mono { font-family: var(--mono); }
+  tr.sel td { background: rgba(253,235,25,0.07); }
+  tr.excluded td { opacity: .45; text-decoration: line-through; }
+  .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  select { background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 9px; padding: 7px 10px; font-size: 13px; min-width: 210px; }
+  .compare-head { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; margin-bottom: 10px;
+                  font-size: 12.5px; color: var(--muted); }
+  .compare-head b { color: var(--text); font-family: var(--mono); }
+  .bars { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+  .bar-row { display: grid; grid-template-columns: 180px 1fr 92px; gap: 10px; align-items: center; font-size: 12px; }
+  .bar-name { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { position: relative; height: 14px; background: rgba(255,255,255,0.04); border-radius: 4px; }
+  .bar-fill { position: absolute; top: 0; height: 100%; border-radius: 4px; }
+  .bar-fill.pos { background: linear-gradient(90deg, rgba(74,222,128,0.55), var(--good)); left: 50%; }
+  .bar-fill.neg { background: linear-gradient(90deg, var(--accent-2), rgba(255,122,118,0.55)); right: 50%; }
+  .bar-val { font-family: var(--mono); text-align: right; }
+  .bar-val.pos { color: var(--good); }
+  .bar-val.neg { color: var(--accent-2); }
+  .axis-mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: rgba(255,255,255,0.18); }
+  .verdict { border-left: 3px solid var(--accent); background: rgba(253,235,25,0.06);
+             padding: 10px 14px; border-radius: 0 10px 10px 0; font-size: 12.5px; color: var(--text); margin-top: 12px; }
+  .verdict.bad { border-left-color: var(--accent-2); background: rgba(255,122,118,0.07); }
+  .verdict.good { border-left-color: var(--good); background: rgba(74,222,128,0.07); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .list { margin: 6px 0 0; padding: 0; list-style: none; }
+  .list li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0;
+             border-bottom: 1px dashed rgba(255,255,255,0.07); font-size: 12.5px; }
+  .list li span:last-child { font-family: var(--mono); color: var(--text); }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px;
+         font-family: var(--mono); border: 1px solid var(--border); color: var(--muted); }
+  footer { max-width: 1220px; margin: 26px auto 0; color: var(--muted); font-size: 11.5px; }
+  @media (max-width: 1100px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 900px) { .grid-3, .two { grid-template-columns: 1fr; } .bar-row { grid-template-columns: 120px 1fr 80px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="kicker">UniNa Corse · Aerodynamics &amp; Cooling</div>
+  <h1>Aero Design <span>Explorer</span></h1>
+  <p class="sub">Diciassette configurazioni di fondo, lette per intero: dove si guadagna deportanza,
+     dove si paga resistenza, cosa i dati permettono di prevedere e quali prove conviene fare adesso.</p>
+  <div class="chips" id="chips"></div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="grid-3" id="kpi-row"></div>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">01</span>Mappa dei modelli</h2>
+    <p class="hint">Ogni punto è un caso. Asse X deportanza, asse Y resistenza: in basso a destra si vince.
+       La linea gialla è la frontiera di Pareto. Clicca un punto per sceglierlo nel confronto per zona.</p>
+    <div id="scatter"></div>
+    <div class="legend">
+      <span><i style="background:#38bdf8"></i>ala posteriore RW1 + diffusore completo</span>
+      <span><i style="background:#ff7a76"></i>ala posteriore Box D4 + diffusore solo centrale</span>
+      <span><i style="background:#fdeb19"></i>frontiera di Pareto</span>
+      <span>differenze sotto <b id="noise-legend"></b> N non sono significative</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">02</span>Tutti i casi</h2>
+    <p class="hint">Intestazioni cliccabili per ordinare. Clicca una riga per usarla come caso A nel confronto.
+       <span id="excluded-note"></span></p>
+    <div id="table-wrap"></div>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">03</span>Dove si guadagna e dove si perde</h2>
+    <p class="hint">Differenza di deportanza per zona tra due casi. Ogni barra è una zona: verde = guadagno,
+       rosso = perdita. La nota in basso dice quanto pesano le zone presenti in uno solo dei due casi.</p>
+    <div class="controls">
+      <label class="muted">Caso A <select id="sel-a"></select></label>
+      <label class="muted">Caso B <select id="sel-b"></select></label>
+      <span class="tag" id="pair-total"></span>
+    </div>
+    <div class="bars" id="bars"></div>
+    <div id="zones-note" class="hint" style="margin-top:12px;"></div>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">04</span>Cosa dicono i dati (e cosa no)</h2>
+    <p class="hint">Modello lineare con validazione leave-one-out: ogni caso è predetto allenandosi sugli altri.
+       Se l'errore è dello stesso ordine delle differenze fra modelli, i dati non bastano per prevedere i dettagli.</p>
+    <div id="model-box"></div>
+    <div class="two" style="margin-top:16px;">
+      <div>
+        <h3 style="font-size:13px;margin:0 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;">Copertura dei parametri</h3>
+        <div id="coverage"></div>
+      </div>
+      <div>
+        <h3 style="font-size:13px;margin:0 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;">Da simulare adesso</h3>
+        <p class="hint" style="margin:0 0 8px;">Combinazioni mai provate, scelte per riempire i vuoti dello spazio di progetto
+           (distanza massima dai casi esistenti). Non sono previsioni: sono le prove che rendono il dataset utile.</p>
+        <div id="proposals"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer id="footer"></footer>
+
+<script>window.__AERO_DATA__ = __PAYLOAD__;</script>
+
+<script id="core">
+window.AeroCore = (function () {
+  var DATA = window.__AERO_DATA__;
+
+  function byId(id) {
+    for (var i = 0; i < DATA.cases.length; i++) {
+      if (DATA.cases[i].id === id) return DATA.cases[i];
+    }
+    return null;
+  }
+
+  function zonesOf(id) { return DATA.zones[id] || {}; }
+
+  function zoneUnion(a, b) {
+    var za = zonesOf(a), zb = zonesOf(b), names = {}, out = [];
+    Object.keys(za).forEach(function (n) { names[n] = true; });
+    Object.keys(zb).forEach(function (n) { names[n] = true; });
+    Object.keys(names).forEach(function (name) {
+      var va = (name in za) ? za[name] : null;
+      var vb = (name in zb) ? zb[name] : null;
+      var delta = (vb === null ? 0 : vb) - (va === null ? 0 : va);
+      out.push({ zone: name, a: va, b: vb, delta: delta });
+    });
+    out.sort(function (x, y) { return Math.abs(y.delta) - Math.abs(x.delta); });
+    return out;
+  }
+
+  function pairSummary(a, b) {
+    var rows = zoneUnion(a, b);
+    var ca = byId(a), cb = byId(b);
+    var common = rows.filter(function (r) { return r.a !== null && r.b !== null; });
+    var onlyA = rows.filter(function (r) { return r.a !== null && r.b === null; });
+    var onlyB = rows.filter(function (r) { return r.a === null && r.b !== null; });
+    function sum(list) { return list.reduce(function (s, r) { return s + r.delta; }, 0); }
+    return {
+      rows: rows, common: common.length, onlyA: onlyA.length, onlyB: onlyB.length,
+      delta_common: sum(common), delta_only_a: -sum(onlyA), delta_only_b: sum(onlyB),
+      dep_a: ca ? ca.dep : null, dep_b: cb ? cb.dep : null,
+      total: (cb && ca) ? cb.dep - ca.dep : null,
+      max_common_delta: common.length ? Math.max.apply(null, common.map(function (r) { return Math.abs(r.delta); })) : 0
+    };
+  }
+
+  function pareto() {
+    var out = [];
+    DATA.cases.forEach(function (c) {
+      var dominated = DATA.cases.some(function (o) {
+        if (o === c) return false;
+        return o.dep >= c.dep && o.drag <= c.drag && (o.dep > c.dep || o.drag < c.drag);
+      });
+      if (!dominated) out.push(c.id);
+    });
+    return out;
+  }
+
+  function verdict(target, noise) {
+    var t = DATA.model.targets[target];
+    if (!DATA.model.available) return { cls: "bad", text: "Dati insufficienti per un modello." };
+    var ratio = t.rmse / Math.max(noise, 1e-9);
+    if (ratio < 3) return { cls: "good", text: "Errore leave-one-out " + t.rmse.toFixed(1) +
+      " (" + ratio.toFixed(1) + "× il rumore): il modello sa prevedere questo target." };
+    if (ratio < 10) return { cls: "", text: "Errore leave-one-out " + t.rmse.toFixed(1) +
+      " (" + ratio.toFixed(1) + "× il rumore): prevede la tendenza, non il singolo caso." };
+    return { cls: "bad", text: "Errore leave-one-out " + t.rmse.toFixed(1) +
+      " (" + ratio.toFixed(0) + "× il rumore): i dati non sostengono una previsione." };
+  }
+
+  return {
+    data: DATA, byId: byId, zonesOf: zonesOf, zoneUnion: zoneUnion,
+    pairSummary: pairSummary, pareto: pareto, verdict: verdict
+  };
+})();
+</script>
+
+<script>
+(function () {
+  var CORE = window.AeroCore;
+  var DATA = CORE.data;
+  var fmt1 = function (v) { return (v === null || v === undefined) ? "n/d" : Number(v).toFixed(1); };
+  var fmt2 = function (v) { return (v === null || v === undefined) ? "n/d" : Number(v).toFixed(2); };
+
+  var WING_COLORS = { "RW1": "#38bdf8", "Box D4": "#ff7a76" };
+
+  // ---------------------------------------------------------------- chips
+  (function renderChips() {
+    var best = DATA.cases[0];
+    var bestLd = DATA.cases.slice().sort(function (a, b) { return b.ld - a.ld; })[0];
+    var chips = [
+      ["casi", DATA.counts.cases],
+      ["etichettati", DATA.counts.labeled],
+      ["zone", DATA.counts.zones],
+      ["rumore", DATA.noise_n.toFixed(1) + " N"],
+      ["migliore deportanza", best.id + " · " + fmt1(best.dep) + " N"],
+      ["miglior L/D", bestLd.id + " · " + fmt2(bestLd.ld)],
+      ["esclusi", (DATA.excluded ? DATA.excluded.length : 0) + " casi"]
+    ];
+    document.getElementById("chips").innerHTML = chips.map(function (c) {
+      return '<span class="chip">' + c[0] + ' <b>' + c[1] + '</b></span>';
+    }).join("");
+  })();
+
+  // ------------------------------------------------------------------ kpi
+  (function renderKpi() {
+    var best = DATA.cases[0];
+    var bestLd = DATA.cases.slice().sort(function (a, b) { return (b.ld || 0) - (a.ld || 0); })[0];
+    var checked = DATA.cases.filter(function (c) { return c.excel_dep !== null; });
+    var worst = 0;
+    checked.forEach(function (c) {
+      if (c.dep !== null && c.excel_dep) {
+        worst = Math.max(worst, Math.abs(c.dep - c.excel_dep) / Math.abs(c.excel_dep) * 100);
+      }
+    });
+    var cards = [
+      { label: "Migliore deportanza", value: fmt1(best.dep), unit: "N", note: best.id + " · iter " + best.iter, cls: "accent" },
+      { label: "Miglior efficienza", value: fmt2(bestLd.ld), unit: "", note: bestLd.id + " · " + fmt1(bestLd.dep) + " N / " + fmt1(bestLd.drag) + " N", cls: "good" },
+      { label: "Ripetibilita'", value: "±" + DATA.noise_n.toFixed(1), unit: "N", note: "da run doppie dello stesso modello", cls: "info" },
+      { label: "Confronto con Fluent", value: "±" + worst.toFixed(2), unit: "%", note: "deportanza su " + checked.length + " casi verificati", cls: "info" }
+    ];
+    document.getElementById("kpi-row").innerHTML = cards.map(function (c) {
+      return '<div class="stat"><div class="label">' + c.label + '</div>' +
+             '<div class="value ' + c.cls + '">' + c.value + '<span class="unit">' + c.unit + '</span></div>' +
+             '<div class="note">' + c.note + '</div></div>';
+    }).join("");
+  })();
+
+  // --------------------------------------------------------------- scatter
+  var selectedA = DATA.cases[0].id;
+  var selectedB = DATA.cases[1] ? DATA.cases[1].id : DATA.cases[0].id;
+
+  function renderScatter() {
+    var width = 1120, height = 420, pad = { l: 64, r: 20, t: 16, b: 44 };
+    var deps = DATA.cases.map(function (c) { return c.dep; });
+    var drags = DATA.cases.map(function (c) { return c.drag; });
+    var minX = Math.min.apply(null, deps) - 15, maxX = Math.max.apply(null, deps) + 15;
+    var minY = Math.min.apply(null, drags) - 10, maxY = Math.max.apply(null, drags) + 10;
+    function sx(v) { return pad.l + (v - minX) / (maxX - minX) * (width - pad.l - pad.r); }
+    function sy(v) { return height - pad.b - (v - minY) / (maxY - minY) * (height - pad.t - pad.b); }
+    var svg = ['<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" role="img">'];
+    for (var gx = 0; gx <= 5; gx++) {
+      var xv = minX + (maxX - minX) * gx / 5;
+      svg.push('<line class="grid" x1="' + sx(xv) + '" y1="' + pad.t + '" x2="' + sx(xv) + '" y2="' + (height - pad.b) + '"/>');
+      svg.push('<text x="' + sx(xv) + '" y="' + (height - pad.b + 16) + '" text-anchor="middle">' + xv.toFixed(0) + '</text>');
+    }
+    for (var gy = 0; gy <= 4; gy++) {
+      var yv = minY + (maxY - minY) * gy / 4;
+      svg.push('<line class="grid" x1="' + pad.l + '" y1="' + sy(yv) + '" x2="' + (width - pad.r) + '" y2="' + sy(yv) + '"/>');
+      svg.push('<text x="' + (pad.l - 8) + '" y="' + (sy(yv) + 4) + '" text-anchor="end">' + yv.toFixed(0) + '</text>');
+    }
+    svg.push('<text x="' + (width / 2) + '" y="' + (height - 6) + '" text-anchor="middle">Deportanza [N]</text>');
+    svg.push('<text x="14" y="' + (height / 2) + '" text-anchor="middle" transform="rotate(-90 14 ' + (height / 2) + ')">Resistenza [N]</text>');
+
+    var paretoIds = CORE.pareto();
+    var front = DATA.cases.filter(function (c) { return paretoIds.indexOf(c.id) >= 0; })
+      .slice().sort(function (a, b) { return b.dep - a.dep; });
+    if (front.length > 1) {
+      var path = front.map(function (c, i) { return (i ? 'L' : 'M') + sx(c.dep) + ' ' + sy(c.drag); }).join(' ');
+      svg.push('<path class="pareto" d="' + path + '"/>');
+    }
+    var placed = [];
+    function canPlace(x, y) {
+      for (var i = 0; i < placed.length; i++) {
+        if (Math.abs(placed[i][0] - x) < 52 && Math.abs(placed[i][1] - y) < 13) return false;
+      }
+      placed.push([x, y]);
+      return true;
+    }
+    DATA.cases.forEach(function (c) {
+      var color = WING_COLORS[c.wing] || "#8fa8b8";
+      var isA = c.id === selectedA;
+      svg.push('<circle class="point" data-id="' + c.id + '" cx="' + sx(c.dep) + '" cy="' + sy(c.drag) +
+               '" r="' + (isA ? 7 : 5) + '" fill="' + color + '" stroke="' + (isA ? "#fdeb19" : "rgba(0,0,0,0.35)") +
+               '" stroke-width="' + (isA ? 2.5 : 1) + '"><title>' + c.id + ' — ' + fmt1(c.dep) + ' N / ' +
+               fmt1(c.drag) + ' N — L/D ' + fmt2(c.ld) + '</title></circle>');
+      var labelX = sx(c.dep) + 9, labelY = sy(c.drag) - 8;
+      if ((paretoIds.indexOf(c.id) >= 0 || isA) && canPlace(labelX, labelY)) {
+        svg.push('<text class="label" x="' + labelX + '" y="' + labelY + '">' + c.id + '</text>');
+      }
+    });
+    svg.push('</svg>');
+    var wrap = document.getElementById("scatter");
+    wrap.innerHTML = svg.join("");
+    Array.prototype.forEach.call(wrap.querySelectorAll("circle.point"), function (node) {
+      node.addEventListener("click", function () {
+        selectedA = node.getAttribute("data-id");
+        syncSelects();
+        renderScatter();
+        renderCompare();
+      });
+    });
+  }
+
+  // ----------------------------------------------------------------- table
+  var sortKey = "dep", sortDir = -1;
+  function renderTable() {
+    var rows = DATA.cases.slice().sort(function (a, b) {
+      var va = a[sortKey], vb = b[sortKey];
+      if (typeof va === "string" || typeof vb === "string") {
+        return String(va).localeCompare(String(vb)) * sortDir;
+      }
+      return ((va || 0) - (vb || 0)) * sortDir;
+    });
+    var head = [["id", "caso", 0], ["dep", "deportanza N", 1], ["drag", "resistenza N", 1],
+                ["ld", "L/D", 1], ["cop", "CoP %", 1], ["iter", "iter", 0],
+                ["wing", "ala post", 0], ["diff", "diffusore", 0], ["modello", "modello", 0]];
+    var html = ['<table><thead><tr>'];
+    head.forEach(function (h) {
+      var cls = (h[0] === "dep" || h[0] === "drag" || h[0] === "ld" || h[0] === "cop") ? "mono" : "";
+      html.push('<th class="' + cls + '" data-key="' + h[0] + '">' + h[1] + '</th>');
+    });
+    html.push('</tr></thead><tbody>');
+    rows.forEach(function (c) {
+      html.push('<tr data-id="' + c.id + '" class="' + (c.id === selectedA ? "sel" : "") + '">' +
+        '<td>' + c.id + '</td>' +
+        '<td class="mono">' + fmt1(c.dep) + '</td>' +
+        '<td class="mono">' + fmt1(c.drag) + '</td>' +
+        '<td class="mono good">' + fmt2(c.ld) + '</td>' +
+        '<td class="mono">' + fmt1(c.cop) + '</td>' +
+        '<td class="mono">' + (c.iter || "-") + '</td>' +
+        '<td>' + (c.wing || "n/d") + '</td>' +
+        '<td>' + (c.diff || "n/d") + '</td>' +
+        '<td>' + (c.modello || "-") + '</td></tr>');
+    });
+    html.push('</tbody></table>');
+    var wrap = document.getElementById("table-wrap");
+    wrap.innerHTML = html.join("");
+    Array.prototype.forEach.call(wrap.querySelectorAll("th"), function (th) {
+      th.addEventListener("click", function () {
+        var key = th.getAttribute("data-key");
+        if (key === sortKey) { sortDir = -sortDir; } else { sortKey = key; sortDir = -1; }
+        renderTable();
+      });
+    });
+    Array.prototype.forEach.call(wrap.querySelectorAll("tbody tr"), function (tr) {
+      tr.addEventListener("click", function () {
+        selectedA = tr.getAttribute("data-id");
+        syncSelects();
+        renderScatter();
+        renderCompare();
+        renderTable();
+      });
+    });
+  }
+
+  // --------------------------------------------------------------- compare
+  function fillSelect(select, current) {
+    select.innerHTML = DATA.cases.map(function (c) {
+      return '<option value="' + c.id + '"' + (c.id === current ? " selected" : "") + '>' +
+             c.id + ' · ' + fmt1(c.dep) + ' N</option>';
+    }).join("");
+  }
+
+  function syncSelects() {
+    fillSelect(document.getElementById("sel-a"), selectedA);
+    fillSelect(document.getElementById("sel-b"), selectedB);
+  }
+
+  function renderCompare() {
+    var summary = CORE.pairSummary(selectedA, selectedB);
+    document.getElementById("pair-total").textContent =
+      "Δ totale " + (summary.total === null ? "n/d" : (summary.total >= 0 ? "+" : "") + summary.total.toFixed(1)) +
+      " N  ·  zone comuni " + summary.common;
+    var maxAbs = Math.max.apply(null, summary.rows.map(function (r) { return Math.abs(r.delta); }));
+    maxAbs = Math.max(maxAbs, 0.1);
+    var shown = summary.rows.filter(function (r) { return Math.abs(r.delta) >= 0.05; }).slice(0, 16);
+    var bars = shown.map(function (r) {
+      var width = Math.abs(r.delta) / maxAbs * 50;
+      var cls = r.delta >= 0 ? "pos" : "neg";
+      var missing = (r.a === null ? " (solo B)" : (r.b === null ? " (solo A)" : ""));
+      return '<div class="bar-row"><div class="bar-name" title="' + r.zone + '">' + r.zone + missing +
+             '</div><div class="bar-track"><div class="axis-mid"></div>' +
+             '<div class="bar-fill ' + cls + '" style="width:' + width + '%"></div></div>' +
+             '<div class="bar-val ' + cls + '">' + (r.delta >= 0 ? "+" : "") + r.delta.toFixed(1) + '</div></div>';
+    });
+    document.getElementById("bars").innerHTML = bars.join("") ||
+      '<p class="hint">Nessuna differenza sopra 0,05 N.</p>';
+    var note = "Zone presenti in entrambi: " + summary.common +
+      " (Δ " + (summary.delta_common >= 0 ? "+" : "") + summary.delta_common.toFixed(1) + " N)";
+    if (summary.onlyA || summary.onlyB) {
+      note += " · solo in A: " + summary.onlyA + " (" + summary.delta_only_a.toFixed(1) +
+              " N) · solo in B: " + summary.onlyB + " (" + (summary.delta_only_b >= 0 ? "+" : "") +
+              summary.delta_only_b.toFixed(1) + " N). Nomi diversi possono indicare la stessa parte.";
+    }
+    document.getElementById("zones-note").textContent = note;
+  }
+
+  // ----------------------------------------------------------------- model
+  function renderModel() {
+    var box = document.getElementById("model-box");
+    if (!DATA.model.available) {
+      box.innerHTML = '<div class="verdict bad">' + (DATA.model.reason || "modello non disponibile") + '</div>';
+      return;
+    }
+    var labels = { dep: "Deportanza [N]", drag: "Resistenza [N]", ld: "L/D" };
+    var rows = ["dep", "drag", "ld"].map(function (target) {
+      var t = DATA.model.targets[target];
+      var v = CORE.verdict(target, DATA.noise_n);
+      return '<tr><td>' + labels[target] + '</td><td class="mono">' + t.rmse.toFixed(2) +
+             '</td><td class="mono">' + (t.r2 * 100).toFixed(0) + '%</td>' +
+             '<td class="mono">' + (t.lambda !== undefined ? t.lambda : "-") + '</td>' +
+             '<td class="mono">' + t.max_abs.toFixed(1) + '</td></tr>';
+    }).join("");
+    var worst = CORE.verdict("dep", DATA.noise_n);
+    var coefs = (DATA.model.coefficients || []).map(function (item) {
+      var sign = item.value >= 0 ? "+" : "";
+      var cls = item.value >= 0 ? "good" : "warn";
+      return '<li><span>' + item.name + '</span><span class="' + cls + '">' + sign +
+             item.value.toFixed(1) + ' N / σ</span></li>';
+    }).join("");
+    box.innerHTML = '<table><thead><tr><th>target</th><th>RMSE LOO</th><th>R² LOO</th>' +
+      '<th>λ</th><th>errore massimo</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="verdict ' + worst.cls + '">Deportanza: ' + worst.text + '</div>' +
+      (coefs ? '<div class="list" style="margin-top:14px;"><li><span><b>Effetto sulla deportanza</b> ' +
+               '(per 1 deviazione standard)</span><span></span></li>' + coefs + '</div>' +
+               '<p class="hint" style="margin-top:6px;">Stime del modello sui casi etichettati: indicano ' +
+               'la direzione, non un rapporto causa-effetto. Con molti parametri che cambiano insieme, ' +
+               'l\'effetto di uno assorbe parte degli altri.</p>' : '');
+  }
+
+  function renderCoverage() {
+    var out = [];
+    ["max_height_mm", "height_gola_mm", "pos_gola_mm"].forEach(function (key) {
+      var item = DATA.coverage[key];
+      out.push('<div class="list"><li><span>' + item.label + ' [' + item.unit + ']</span><span>' +
+               item.values.join(" · ") + '</span></li></div>');
+    });
+    ["ala_post", "diffusore"].forEach(function (key) {
+      var item = DATA.coverage[key];
+      var text = Object.keys(item.counts).map(function (k) { return k + " ×" + item.counts[k]; }).join(" · ");
+      out.push('<div class="list"><li><span>' + item.label + '</span><span>' + text + '</span></li></div>');
+    });
+    document.getElementById("coverage").innerHTML = out.join("");
+  }
+
+  function renderProposals() {
+    if (!DATA.proposals.length) {
+      document.getElementById("proposals").innerHTML = '<p class="hint">Dati insufficienti per proporre.</p>';
+      return;
+    }
+    var rows = DATA.proposals.map(function (p, i) {
+      return '<tr><td class="mono">#' + (i + 1) + '</td><td class="mono">' + p.max_h + '</td>' +
+             '<td class="mono">' + p.gola + '</td><td class="mono">' + p.pos + '</td>' +
+             '<td>' + p.wing + '</td><td>' + p.diff + '</td>' +
+             '<td class="mono">' + p.distance.toFixed(1) + '</td></tr>';
+    }).join("");
+    document.getElementById("proposals").innerHTML =
+      '<table><thead><tr><th>#</th><th>max h mm</th><th>gola mm</th><th>pos mm</th>' +
+      '<th>ala post</th><th>diffusore</th><th>distanza</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  // ------------------------------------------------------------------ boot
+  syncSelects();
+  document.getElementById("sel-a").addEventListener("change", function (e) {
+    selectedA = e.target.value; renderScatter(); renderCompare(); renderTable();
+  });
+  document.getElementById("sel-b").addEventListener("change", function (e) {
+    selectedB = e.target.value; renderCompare();
+  });
+  renderScatter();
+  renderTable();
+  renderCompare();
+  renderModel();
+  renderCoverage();
+  renderProposals();
+  (function fillNoise() {
+    var node = document.getElementById("noise-legend");
+    if (node) node.textContent = DATA.noise_n.toFixed(1);
+  })();
+  (function showExcluded() {
+    var excluded = DATA.excluded || [];
+    var note = document.getElementById("excluded-note");
+    if (note && excluded.length) {
+      note.innerHTML = '<span class="tag">esclusi ' + excluded.length + ': ' +
+        excluded.join(", ") + '</span>';
+    }
+  })();
+  document.getElementById("footer").textContent =
+    "Generato il " + DATA.generated + " · Aero Design Explorer · dati: cas/dat reali elaborati da FS-MetaPostDiag";
+})();
+</script>
+
+</body>
+</html>
