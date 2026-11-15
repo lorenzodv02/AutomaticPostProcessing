@@ -305,9 +305,16 @@ def main():
         return 0
 
     if args.launcher:
-        from meta_driver.launcher_menu import run_launcher
+        # Prima la finestra grafica; se Tk non c'e' si ricade sul menu testuale.
+        try:
+            from meta_driver.gui_launcher import launch_launcher_gui
 
-        return run_launcher(cfg, args, execute_full_diagnostic_pipeline)
+            return launch_launcher_gui(cfg, args, execute_full_diagnostic_pipeline)
+        except Exception as exc:  # noqa: BLE001 - qualunque problema di Tk
+            print("[LAUNCHER] interfaccia grafica non disponibile (%s): menu testuale." % exc)
+            from meta_driver.launcher_menu import run_launcher
+
+            return run_launcher(cfg, args, execute_full_diagnostic_pipeline)
 
     if args.suite:
         from meta_driver.suite_mode import run_suite

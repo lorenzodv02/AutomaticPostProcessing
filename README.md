@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.19.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.20.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.19.0
+python main.py --version      # FS-MetaPostDiag 1.20.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,18 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.20.0 — Launcher e batch grafici, con il brand di squadra
+
+Il launcher diventa una **finestra Tkinter brandizzata**: niente più menu testuale.
+
+- **Quattro schede**: Singolo caso, Multi-caso, Suite, Geometria; scheda attiva in giallo brand.
+- **Multi-caso grafico**: campi per cartella radice e cartella dati con "Sfoglia…", assieme a tendina, opzioni (rifai i casi, report completi), **tabella dei casi** con stato e tempo, barra di avanzamento, log live in fondo, pulsante **Annulla** (si ferma tra un caso e l'altro).
+- **Brand**: monogramma UC ridimensionato, palette ufficiale (`#11255C`, `#5B2581`, `#FDEB19`, `#D8EEFC`), Roboto/Roboto Condensed, barrette d'accento gialle, barre oblique nell'header, pulsante principale a gradiente giallo.
+- Tutto gira in un thread: la finestra resta viva mentre il batch lavora; il log cattura l'output della pipeline.
+- La modalità testuale `--launcher` resta come fallback se Tk non è disponibile.
+
+Verificato: singolo caso con pipeline reale (wiring), batch grafico reale su FW5 (dataset.csv, geom, index.csv, Aero_Suite.html), annullamento e stato casi.
 
 ### v1.19.0 — Launcher: singolo caso o multi-caso, scelto da menu
 
