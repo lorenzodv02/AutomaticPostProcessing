@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.1.0
+python main.py --version      # FS-MetaPostDiag 1.2.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,18 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.2.0 — restyling moderno dell'interfaccia
+
+Stessa brand identity, linguaggio visivo aggiornato: via gli elementi che invecchiavano l'interfaccia.
+
+- **Card senza bordi e con angoli arrotondati** (`RoundedPanel`, radius 18) al posto dei riquadri con cornice: la gerarchia la fa la superficie, non la linea.
+- **Via i dingbat** `◈ ✦ ⚙ ▶ ▤ ↗`: al loro posto una **barretta d'accento** colorata accanto ai titoli.
+- **Un solo elemento pieno**: la CTA ora è gialla piena con testo navy e angoli morbidi, senza gradiente; le azioni secondarie diventano **outline** o **ghost**.
+- **Gerarchia tipografica**: titoli 15/11, etichette di campo in maiuscoletto attenuato, **KPI a 19 pt**.
+- **Header più arioso** con chip `META Post v25.1+` e, al posto della striscia piena, un **filo sottile con tre accenti** di brand.
+- Scrollbar sottile e discreta (gialla solo allo hover), barra di avanzamento 4 px che a riposo resta neutra.
+- Console incassata senza cornice, interlinea maggiore.
 
 ### v1.1.0 — interfaccia in brand identity UniNa Corse
 

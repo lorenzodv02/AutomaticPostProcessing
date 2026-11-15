@@ -92,6 +92,59 @@ def lighten(color: str, amount: float = 0.12) -> str:
     return mix_color(color, "#ffffff", amount)
 
 
+def _rounded_rect(canvas, x0, y0, x1, y1, radius, **kwargs):
+    """Rettangolo arrotondato (poligono smussato): base delle card moderne."""
+    r = max(1, min(radius, (x1 - x0) / 2.0, (y1 - y0) / 2.0))
+    points = [
+        x0 + r, y0, x1 - r, y0, x1, y0, x1, y0 + r,
+        x1, y1 - r, x1, y1, x1 - r, y1, x0 + r, y1,
+        x0, y1, x0, y1 - r, x0, y0 + r, x0, y0,
+    ]
+    return canvas.create_polygon(points, smooth=True, **kwargs)
+
+
+class RoundedPanel(tk.Canvas):
+    """
+    Card moderna: superficie piena, angoli arrotondati, **nessun bordo**.
+
+    Ospita un Frame reale (`body`): chi la usa continua a pack/grid dentro
+    `body` come faceva con il vecchio Frame bordato.
+
+    `stretch=True` fa crescere il corpo fino all'altezza disponibile (serve ai
+    pannelli che riempiono una cella della griglia, come la console).
+    """
+
+    def __init__(self, master, radius=16, fill=None, padx=20, pady=16, stretch=False):
+        super().__init__(master, bd=0, highlightthickness=0, bg=master.cget("bg"))
+        self._radius = radius
+        self._fill = fill or SURFACE
+        self._padx, self._pady = padx, pady
+        self._stretch = stretch
+        self.body = tk.Frame(self, bg=self._fill)
+        self._win = self.create_window(padx, pady, window=self.body, anchor="nw")
+        self.body.bind("<Configure>", self._sync_height)
+        self.bind("<Configure>", self._sync_geometry)
+
+    def _sync_height(self, _e=None):
+        if not self._stretch:
+            self.configure(height=self.body.winfo_reqheight() + 2 * self._pady)
+
+    def _sync_geometry(self, event):
+        self.coords(self._win, self._padx, self._pady)
+        self.itemconfigure(self._win, width=max(1, event.width - 2 * self._padx))
+        if self._stretch:
+            self.itemconfigure(self._win, height=max(1, event.height - 2 * self._pady))
+        self._draw_bg(event.width, event.height)
+
+    def _draw_bg(self, width, height):
+        self.delete("panelbg")
+        if width <= 1 or height <= 1:
+            return
+        _rounded_rect(self, 0, 0, width - 1, height - 1, self._radius,
+                      fill=self._fill, outline="", tags="panelbg")
+        self.tag_lower("panelbg")
+
+
 def _rounded_polygon(canvas, x0, y0, x1, y1, r, **kwargs):
     """Disegna un rettangolo arrotondato morbido come poligono smussato."""
     r = max(1, min(r, (x1 - x0) / 2.0, (y1 - y0) / 2.0))
@@ -160,14 +213,15 @@ class GradientButton(tk.Canvas):
         w = self.winfo_width() if self.winfo_width() > 1 else self._pw
         h = self.winfo_height() if self.winfo_height() > 1 else self._ph
         if not self._enabled:
-            c1, c2, fg = SURFACE_ALT, mix_color(SURFACE_ALT, ICE, 0.10), FAINT
+            fill, fg = SURFACE_ALT, FAINT
         elif self._hover:
-            c1, c2, fg = lighten(self._c1, 0.14), lighten(self._c2, 0.14), self._fg
+            fill, fg = lighten(self._c1, 0.10), self._fg
         elif self._pressed:
-            c1, c2, fg = mix_color(self._c1, "#000000", 0.12), mix_color(self._c2, "#000000", 0.12), self._fg
+            fill, fg = mix_color(self._c1, "#000000", 0.10), self._fg
         else:
-            c1, c2, fg = self._c1, self._c2, self._fg
-        _draw_gradient_round_rect(self, w, h, c1, c2, radius=min(16, h / 2.0))
+            fill, fg = self._c1, self._fg
+        # stile moderno: tinta piena e angoli morbidi, niente gradiente
+        _rounded_rect(self, 1, 1, w - 1, h - 1, min(11, h / 2.0), fill=fill, outline="")
         self.create_text(w / 2.0, h / 2.0, text=self._text, fill=fg, font=self._font)
 
     def _on_enter(self, _e=None):
@@ -208,25 +262,35 @@ class GradientButton(tk.Canvas):
 
 
 class FlatButton(tk.Button):
-    """Pulsante secondario piatto con hover e stato disabilitato coerente col tema."""
+    """
+    Pulsante secondario moderno: **outline** o **ghost**, mai un blocco pieno.
 
-    # Tinte di brand: il viola e' l'azione secondaria, il navy la superficie
-    _PALETTES = {
-        "secondary": (SURFACE_ALT, TEXT_SOFT, brand.VIOLET),
-        "success":   (brand.VIOLET, TEXT_SOFT, brand.VIOLET_RAMP[1]),
-        "ghost":     (SURFACE, MUTED, SURFACE_ALT),
+    L'outline ha solo il contorno (1 px) e diventa superficie piena allo hover;
+    il ghost e' testo nudo. Cosi' l'unico elemento pieno resta la call to action.
+    """
+
+    # kind -> (fg, hover_bg, bordo)
+    _STYLES = {
+        "secondary": (TEXT_SOFT, SURFACE_ALT, BORDER),
+        "success":   (ACCENT, SURFACE_ALT, ACCENT),
+        "ghost":     (MUTED, SURFACE_ALT, None),
     }
 
     def __init__(self, master, text, command=None, kind="secondary",
                  font=(FONT_UI, 9, "bold"), **kwargs):
-        base, fg, hover = self._PALETTES.get(kind, self._PALETTES["secondary"])
-        self._base, self._fg, self._hover = base, fg, hover
+        fg, hover, border = self._STYLES.get(kind, self._STYLES["secondary"])
+        parent_bg = master.cget("bg")
+        base = parent_bg
+        self._base, self._fg, self._hover, self._border = base, fg, hover, border
         self._enabled = True
         super().__init__(
             master, text=text, command=command, bg=base, fg=fg,
             activebackground=hover, activeforeground=fg,
             disabledforeground=FAINT, relief="flat", bd=0,
-            padx=13, pady=8, cursor="hand2", font=font, **kwargs
+            highlightthickness=1 if border else 0,
+            highlightbackground=border or parent_bg,
+            highlightcolor=border or parent_bg,
+            padx=14, pady=8, cursor="hand2", font=font, **kwargs
         )
         self.bind("<Enter>", self._on_enter)
         self.bind("<Leave>", self._on_leave)
@@ -243,10 +307,12 @@ class FlatButton(tk.Button):
         self._enabled = bool(enabled)
         if enabled:
             self.configure(state=tk.NORMAL, bg=self._base, fg=self._fg,
-                           cursor="hand2", activebackground=self._hover)
+                           cursor="hand2", activebackground=self._hover,
+                           highlightbackground=self._border or self._base)
         else:
-            self.configure(state=tk.DISABLED, bg=SURFACE_ALT, fg=FAINT,
-                           cursor="arrow", activebackground=SURFACE_ALT)
+            self.configure(state=tk.DISABLED, bg=self._base, fg=FAINT,
+                           cursor="arrow", activebackground=self._base,
+                           highlightbackground=BORDER_SOFT)
 
 
 class StatusPill(tk.Canvas):
@@ -326,18 +392,12 @@ class GradientStrip(tk.Canvas):
         if width <= 1:
             return
         h = self._strip_h
-        slant = h * 1.4
-        self.create_rectangle(0, 0, width, h, fill=BG, outline="")
-        x = -self.PERIOD
-        while x < width + self.PERIOD:
-            for color, offset in self.BARS:
-                x0 = x + offset * self.PERIOD
-                self.create_polygon(
-                    x0, h, x0 + self.BAR_W, h,
-                    x0 + self.BAR_W + slant, 0, x0 + slant, 0,
-                    fill=color, outline="",
-                )
-            x += self.PERIOD
+        # un filo continuo + tre accenti di brand raggruppati a sinistra
+        self.create_line(0, h - 1, width, h - 1, fill=BORDER_SOFT)
+        for index, color in enumerate((ACCENT, INDIGO, TEXT_SOFT)):
+            x = 30 + index * 24
+            if x + 18 < width:
+                self.create_line(x, h - 1, x + 18, h - 1, fill=color, width=2)
 
 
 class ScrollableFrame(tk.Frame):
@@ -378,35 +438,41 @@ class ScrollableFrame(tk.Frame):
 # ==============================================================================
 #  HELPERS DI LAYOUT
 # ==============================================================================
-def card(parent, title=None, subtitle=None, icon=None):
-    """Crea una card con bordo sottile; restituisce (outer, body)."""
-    outer = tk.Frame(parent, bg=SURFACE, highlightbackground=BORDER,
-                     highlightthickness=1, bd=0)
-    body = tk.Frame(outer, bg=SURFACE)
-    body.pack(fill=tk.BOTH, expand=True, padx=18, pady=12)
+def card(parent, title=None, subtitle=None, icon=None, accent=None):
+    """
+    Card moderna: pannello arrotondato, superficie piena, **nessun bordo**.
+
+    `icon` resta accettato per compatibilita' ma non viene disegnato: al suo
+    posto c'e' una barretta d'accento colorata (piu' pulita dei dingbat ◈ ✦ ⚙).
+    Restituisce `(panel, body)`.
+    """
+    panel = RoundedPanel(parent, radius=18, padx=22, pady=18)
+    body = panel.body
     if title:
         head = tk.Frame(body, bg=SURFACE)
         head.pack(fill=tk.X)
-        if icon:
-            tk.Label(head, text=icon, bg=SURFACE, fg=ACCENT,
-                     font=(FONT_UI, 10, "bold")).pack(side=tk.LEFT, padx=(0, 7))
+        bar = tk.Frame(head, bg=accent or ACCENT, width=3, height=16)
+        bar.pack(side=tk.LEFT, padx=(0, 11))
+        bar.pack_propagate(False)
         tk.Label(head, text=title, bg=SURFACE, fg=TEXT,
-                 font=(FONT_UI, 10, "bold")).pack(side=tk.LEFT)
+                 font=(FONT_UI, 11, "bold")).pack(side=tk.LEFT)
         if subtitle:
             tk.Label(body, text=subtitle, bg=SURFACE, fg=MUTED,
                      font=(FONT_UI, 8), justify="left",
-                     wraplength=340).pack(anchor="w", pady=(3, 0))
-        tk.Frame(body, bg=BORDER_SOFT, height=1).pack(fill=tk.X, pady=(10, 10))
-    return outer, body
+                     wraplength=350).pack(anchor="w", pady=(7, 14))
+        else:
+            tk.Frame(body, bg=SURFACE, height=12).pack(fill=tk.X)
+    return panel, body
 
 
 def field_label(parent, text, hint=None):
+    """Etichetta di campo moderna: minuscolo maiuscoletto attenuato + unita'."""
     row = tk.Frame(parent, bg=SURFACE)
-    tk.Label(row, text=text, bg=SURFACE, fg=TEXT_SOFT,
-             font=(FONT_UI, 9, "bold")).pack(side=tk.LEFT)
+    tk.Label(row, text=text.upper(), bg=SURFACE, fg=MUTED,
+             font=(FONT_UI, 8, "bold")).pack(side=tk.LEFT)
     if hint:
         tk.Label(row, text=hint, bg=SURFACE, fg=FAINT,
-                 font=(FONT_UI, 8)).pack(side=tk.LEFT, padx=(6, 0))
+                 font=(FONT_UI, 8)).pack(side=tk.LEFT, padx=(7, 0))
     return row
 
 
@@ -416,7 +482,7 @@ def make_entry(parent, variable, width=20, show=None):
         bg=INPUT_BG, fg=TEXT, insertbackground=ACCENT,
         disabledbackground=SURFACE_ALT, disabledforeground=MUTED,
         relief="flat", bd=0, highlightthickness=1,
-        highlightbackground=BORDER, highlightcolor=ACCENT,
+        highlightbackground=BORDER_SOFT, highlightcolor=ACCENT,
         font=(FONT_UI, 10),
     )
 
@@ -508,12 +574,12 @@ class AeroDiagnosticsGUI:
             selectforeground=[("readonly", TEXT)],
             bordercolor=[("focus", ACCENT)],
         )
-        # Scrollbar sottile in tinta brand: thumb viola, giallo allo hover
+        # Scrollbar sottile e discreta: thumb in tinta bordo, giallo allo hover
         style.configure(
             "Modern.Vertical.TScrollbar",
-            background=INDIGO, troughcolor=SURFACE, bordercolor=SURFACE,
-            arrowcolor=TEXT_SOFT, darkcolor=INDIGO, lightcolor=INDIGO,
-            width=8, arrowsize=10, relief="flat",
+            background=BORDER, troughcolor=BG, bordercolor=BG,
+            arrowcolor=FAINT, darkcolor=BORDER, lightcolor=BORDER,
+            width=6, arrowsize=8, relief="flat",
         )
         style.map("Modern.Vertical.TScrollbar",
                   background=[("active", ACCENT), ("pressed", ACCENT)],
@@ -521,7 +587,7 @@ class AeroDiagnosticsGUI:
         style.configure(
             "Accent.Horizontal.TProgressbar",
             troughcolor=SURFACE_ALT, background=ACCENT, bordercolor=SURFACE_ALT,
-            lightcolor=ACCENT, darkcolor=ACCENT, thickness=6,
+            lightcolor=ACCENT, darkcolor=ACCENT, thickness=4,
         )
         self.root.option_add("*TCombobox*Listbox.background", SURFACE)
         self.root.option_add("*TCombobox*Listbox.foreground", TEXT)
@@ -587,13 +653,13 @@ class AeroDiagnosticsGUI:
         self._build_header()
 
         body = tk.Frame(self.root, bg=BG)
-        body.pack(fill=tk.BOTH, expand=True, padx=22, pady=(16, 6))
-        body.grid_columnconfigure(0, minsize=440, weight=0)
+        body.pack(fill=tk.BOTH, expand=True, padx=28, pady=(18, 8))
+        body.grid_columnconfigure(0, minsize=470, weight=0)
         body.grid_columnconfigure(1, weight=1)
         body.grid_rowconfigure(0, weight=1)
 
         self.left = ScrollableFrame(body)
-        self.left.grid(row=0, column=0, sticky="nsew", padx=(0, 16))
+        self.left.grid(row=0, column=0, sticky="nsew", padx=(0, 18))
 
         right = tk.Frame(body, bg=BG)
         right.grid(row=0, column=1, sticky="nsew")
@@ -612,8 +678,8 @@ class AeroDiagnosticsGUI:
         header = tk.Frame(self.root, bg=BG)
         header.pack(fill=tk.X)
 
-        inner = tk.Frame(header, bg=BG, padx=22, pady=12)
-        inner.pack(fill=tk.X)
+        inner = tk.Frame(header, bg=BG, padx=28)
+        inner.pack(fill=tk.X, pady=(18, 14))
 
         # destra: stato META + segno grafico del brand
         bars = _BrandBars(inner)
@@ -621,10 +687,11 @@ class AeroDiagnosticsGUI:
 
         meta_box = tk.Frame(inner, bg=BG)
         meta_box.pack(side=tk.RIGHT)
-        tk.Label(meta_box, text="META Post v25.1+", bg=BG, fg=ACCENT,
-                 font=(FONT_UI, 9, "bold")).pack(anchor="e")
+        chip = tk.Label(meta_box, text="  META Post v25.1+  ", bg=SURFACE_ALT,
+                        fg=ACCENT, font=(FONT_UI, 8, "bold"), pady=3)
+        chip.pack(anchor="e")
         tk.Label(meta_box, text="dati reali .cas/.dat", bg=BG, fg=FAINT,
-                 font=(FONT_UI, 8)).pack(anchor="e", pady=(1, 0))
+                 font=(FONT_UI, 8)).pack(anchor="e", pady=(4, 0))
 
         # sinistra: monogramma UC del brand + titoli
         monogram = self._load_image("uc-monogram-white.png", 38)
@@ -635,25 +702,25 @@ class AeroDiagnosticsGUI:
         titles = tk.Frame(inner, bg=BG)
         titles.pack(side=tk.LEFT)
         tk.Label(titles, text="FS · MetaPostDiag", bg=BG, fg=TEXT,
-                 font=(FONT_UI, 16, "bold")).pack(anchor="w")
+                 font=(FONT_UI, 17, "bold")).pack(anchor="w")
         tk.Label(
             titles,
             text="Post-Processing CFD automatico · Design Diagnostics · UniNa Corse",
             bg=BG, fg=MUTED, font=(FONT_UI, 8),
         ).pack(anchor="w", pady=(1, 0))
 
-        GradientStrip(self.root, height=6).pack(fill=tk.X)
+        GradientStrip(self.root, height=3).pack(fill=tk.X)
 
     # ------------------------------------------------------------------ left column
     def _build_source_card(self, parent):
         outer, body = card(
             parent, "Sorgente CFD",
-            "Cartella di analisi, assieme da isolare e lettura diretta dei PID dal file .cas",
+            "Cartella di analisi e isolamento dei PID dal file .cas",
             icon="◈",
         )
-        outer.pack(fill=tk.X, pady=(0, 8))
+        outer.pack(fill=tk.X, pady=(0, 12))
 
-        field_label(body, "Cartella analisi", ".cas / .dat").pack(anchor="w", pady=(0, 5))
+        field_label(body, "Cartella analisi", ".cas / .dat").pack(anchor="w", pady=(0, 6))
         row = tk.Frame(body, bg=SURFACE)
         row.pack(fill=tk.X)
         entry = make_entry(row, self.var_workspace)
@@ -661,12 +728,11 @@ class AeroDiagnosticsGUI:
         FlatButton(row, "Sfoglia", command=self._browse_workspace, kind="secondary").pack(
             side=tk.LEFT, padx=(8, 0))
 
-        files = tk.Frame(body, bg=SURFACE_ALT, highlightbackground=BORDER_SOFT,
-                         highlightthickness=1)
-        files.pack(fill=tk.X, pady=(10, 0))
-        self.lbl_cas_name, self.lbl_cas_size = self._file_row(files, ACCENT, "Nessun file .cas")
-        tk.Frame(files, bg=BORDER_SOFT, height=1).pack(fill=tk.X, padx=10)
-        self.lbl_dat_name, self.lbl_dat_size = self._file_row(files, VIOLET_SOFT, "Nessun file .dat")
+        files = RoundedPanel(body, radius=12, fill=SURFACE_ALT, padx=14, pady=6)
+        files.pack(fill=tk.X, pady=(12, 0))
+        self.lbl_cas_name, self.lbl_cas_size = self._file_row(files.body, ACCENT, "Nessun file .cas")
+        tk.Frame(files.body, bg=BORDER_SOFT, height=1).pack(fill=tk.X, pady=5)
+        self.lbl_dat_name, self.lbl_dat_size = self._file_row(files.body, VIOLET_SOFT, "Nessun file .dat")
 
         field_label(body, "Assieme da isolare").pack(anchor="w", pady=(12, 5))
         asm_row = tk.Frame(body, bg=SURFACE)
@@ -689,7 +755,7 @@ class AeroDiagnosticsGUI:
 
     def _file_row(self, parent, color, placeholder):
         row = tk.Frame(parent, bg=SURFACE_ALT)
-        row.pack(fill=tk.X, padx=10, pady=6)
+        row.pack(fill=tk.X, pady=2)
         row.grid_columnconfigure(1, weight=1)
         tk.Label(row, text="●", bg=SURFACE_ALT, fg=color,
                  font=(FONT_UI, 8)).grid(row=0, column=0)
@@ -707,9 +773,9 @@ class AeroDiagnosticsGUI:
             "Percorso dell'eseguibile e condizioni di riferimento per il calcolo dei coefficienti",
             icon="⚙",
         )
-        outer.pack(fill=tk.X, pady=(0, 8))
+        outer.pack(fill=tk.X, pady=(0, 12))
 
-        field_label(body, "Eseguibile META Post").pack(anchor="w", pady=(0, 5))
+        field_label(body, "Eseguibile META Post").pack(anchor="w", pady=(0, 6))
         row = tk.Frame(body, bg=SURFACE)
         row.pack(fill=tk.X)
         make_entry(row, self.var_meta_exe).pack(side=tk.LEFT, fill=tk.X,
@@ -750,58 +816,58 @@ class AeroDiagnosticsGUI:
 
     # ------------------------------------------------------------------ right column
     def _build_action_card(self, parent):
-        outer = tk.Frame(parent, bg=SURFACE, highlightbackground=BORDER,
-                         highlightthickness=1, bd=0)
+        outer = RoundedPanel(parent, radius=18, padx=22, pady=18)
         outer.grid(row=0, column=0, sticky="ew", pady=(0, 14))
-        body = tk.Frame(outer, bg=SURFACE)
-        body.pack(fill=tk.BOTH, expand=True, padx=18, pady=16)
+        body = outer.body
 
         top = tk.Frame(body, bg=SURFACE)
         top.pack(fill=tk.X)
         titles = tk.Frame(top, bg=SURFACE)
         titles.pack(side=tk.LEFT, anchor="w")
         tk.Label(titles, text="Pipeline di analisi", bg=SURFACE, fg=TEXT,
-                 font=(FONT_UI, 13, "bold")).pack(anchor="w")
+                 font=(FONT_UI, 15, "bold")).pack(anchor="w")
         tk.Label(titles, text="Mesh reale · META Post · Computer Vision · Report HTML standalone",
                  bg=SURFACE, fg=MUTED, font=(FONT_UI, 8)).pack(anchor="w", pady=(2, 0))
         self.status_pill = StatusPill(top, "Pronto", SUCCESS)
         self.status_pill.pack(side=tk.RIGHT, anchor="e", padx=(10, 0))
 
         buttons = tk.Frame(body, bg=SURFACE)
-        buttons.pack(fill=tk.X, pady=(15, 0))
+        buttons.pack(fill=tk.X, pady=(18, 0))
+        # unico elemento pieno dell'interfaccia: la call to action
         self.btn_run = GradientButton(
-            buttons, "▶   AVVIA POST-PROCESSING", command=self._start_pipeline_thread,
-            width=340, height=48, c1=ACCENT_DARK, c2=INDIGO,
+            buttons, "AVVIA POST-PROCESSING", command=self._start_pipeline_thread,
+            width=300, height=46, c1=ACCENT, c2=ACCENT, fg=brand.NAVY,
+            font=(FONT_UI, 10, "bold"),
         )
         self.btn_run.pack(side=tk.LEFT)
         chk = tk.Checkbutton(
             buttons, text="Apri report al termine", variable=self.var_auto_open,
             bg=SURFACE, fg=MUTED, activebackground=SURFACE, activeforeground=TEXT,
-            selectcolor=SURFACE_ALT, bd=0, highlightthickness=0, cursor="hand2",
+            selectcolor=ACCENT, bd=0, highlightthickness=0, cursor="hand2",
             font=(FONT_UI, 8),
         )
-        chk.pack(side=tk.LEFT, padx=(16, 0))
+        chk.pack(side=tk.LEFT, padx=(18, 0))
 
         tools = tk.Frame(body, bg=SURFACE)
-        tools.pack(fill=tk.X, pady=(10, 0))
-        self.btn_open_report = FlatButton(tools, "↗  Apri report", command=self._open_report,
+        tools.pack(fill=tk.X, pady=(12, 0))
+        self.btn_open_report = FlatButton(tools, "Apri report", command=self._open_report,
                                           kind="success")
         self.btn_open_report.pack(side=tk.LEFT)
         self.btn_open_report.set_enabled(False)
-        self.btn_open_output = FlatButton(tools, "▤  Cartella output", command=self._open_output,
+        self.btn_open_output = FlatButton(tools, "Cartella output", command=self._open_output,
                                           kind="secondary")
         self.btn_open_output.pack(side=tk.LEFT, padx=(8, 0))
-        self.btn_open_meta = FlatButton(tools, "◈  Sessione META", command=self._open_meta_session,
+        self.btn_open_meta = FlatButton(tools, "Sessione META", command=self._open_meta_session,
                                         kind="secondary")
         self.btn_open_meta.pack(side=tk.LEFT, padx=(8, 0))
         self.btn_open_meta.set_enabled(False)
 
         self.progress = ttk.Progressbar(body, style="Accent.Horizontal.TProgressbar",
                                         mode="indeterminate")
-        self.progress.pack(fill=tk.X, pady=(14, 0))
+        self.progress.pack(fill=tk.X, pady=(16, 0))
 
         stats = tk.Frame(body, bg=SURFACE)
-        stats.pack(fill=tk.X, pady=(14, 0))
+        stats.pack(fill=tk.X, pady=(16, 0))
         for i in range(3):
             stats.grid_columnconfigure(i, weight=1, uniform="stat")
         cas_card, self.stat_cas = self._stat_card(stats, "FILE .CAS", "—", ACCENT)
@@ -816,42 +882,41 @@ class AeroDiagnosticsGUI:
         meta_card.grid(row=0, column=2, sticky="ew", padx=(5, 0))
 
     def _stat_card(self, parent, label, value, color):
-        frame = tk.Frame(parent, bg=SURFACE_ALT, highlightbackground=BORDER_SOFT,
-                         highlightthickness=1)
-        tk.Label(frame, text=label, bg=SURFACE_ALT, fg=FAINT,
-                 font=(FONT_UI, 7, "bold")).pack(anchor="w", padx=11, pady=(8, 0))
-        val = tk.Label(frame, text=value, bg=SURFACE_ALT, fg=color,
-                       font=(FONT_UI, 12, "bold"))
-        val.pack(anchor="w", padx=11, pady=(0, 8))
+        """Tile KPI moderna: etichetta minuta e attenuata, valore grande."""
+        frame = RoundedPanel(parent, radius=14, fill=SURFACE_ALT, padx=16, pady=12)
+        tk.Label(frame.body, text=label, bg=SURFACE_ALT, fg=FAINT,
+                 font=(FONT_UI, 7, "bold")).pack(anchor="w")
+        val = tk.Label(frame.body, text=value, bg=SURFACE_ALT, fg=color,
+                       font=(FONT_UI, 19, "bold"))
+        val.pack(anchor="w", pady=(3, 0))
         return frame, val
 
     def _build_log_card(self, parent):
-        outer = tk.Frame(parent, bg=SURFACE, highlightbackground=BORDER,
-                         highlightthickness=1, bd=0)
+        outer = RoundedPanel(parent, radius=18, padx=18, pady=14, stretch=True)
         outer.grid(row=1, column=0, sticky="nsew")
-        body = tk.Frame(outer, bg=SURFACE)
-        body.pack(fill=tk.BOTH, expand=True, padx=14, pady=12)
+        body = outer.body
 
         head = tk.Frame(body, bg=SURFACE)
-        head.pack(fill=tk.X, pady=(0, 8))
-        tk.Label(head, text="●", bg=SURFACE, fg=ACCENT,
-                 font=(FONT_UI, 8)).pack(side=tk.LEFT)
-        tk.Label(head, text=" Console di esecuzione", bg=SURFACE, fg=TEXT,
-                 font=(FONT_UI, 10, "bold")).pack(side=tk.LEFT)
+        head.pack(fill=tk.X, pady=(0, 10))
+        bar = tk.Frame(head, bg=ACCENT, width=3, height=15)
+        bar.pack(side=tk.LEFT, padx=(0, 10))
+        bar.pack_propagate(False)
+        tk.Label(head, text="Console di esecuzione", bg=SURFACE, fg=TEXT,
+                 font=(FONT_UI, 11, "bold")).pack(side=tk.LEFT)
         tk.Label(head, text="verifica PID · mesh 3D · evidenze diagnostiche",
-                 bg=SURFACE, fg=FAINT, font=(FONT_UI, 8)).pack(side=tk.LEFT, padx=(8, 0))
+                 bg=SURFACE, fg=FAINT, font=(FONT_UI, 8)).pack(side=tk.LEFT, padx=(10, 0))
         FlatButton(head, "Copia", command=self._copy_log, kind="ghost",
                    font=(FONT_UI, 8)).pack(side=tk.RIGHT)
         FlatButton(head, "Pulisci", command=self._clear_log, kind="ghost",
                    font=(FONT_UI, 8)).pack(side=tk.RIGHT, padx=(0, 4))
 
-        wrap = tk.Frame(body, bg=INPUT_BG, highlightbackground=BORDER_SOFT,
-                        highlightthickness=1)
+        # superficie incassata senza bordo: piu' pulita di un riquadro bordato
+        wrap = tk.Frame(body, bg=INPUT_BG)
         wrap.pack(fill=tk.BOTH, expand=True)
         self.txt_log = tk.Text(
             wrap, bg=INPUT_BG, fg=TEXT_SOFT, insertbackground=ACCENT,
-            relief="flat", bd=0, padx=12, pady=10, wrap="word",
-            font=(FONT_MONO, 9), state=tk.DISABLED, spacing1=1, spacing3=2,
+            relief="flat", bd=0, padx=16, pady=14, wrap="word",
+            font=(FONT_MONO, 9), state=tk.DISABLED, spacing1=2, spacing3=3,
             selectbackground=BORDER, selectforeground=TEXT,
         )
         scroll = ttk.Scrollbar(wrap, orient="vertical", command=self.txt_log.yview,
@@ -868,7 +933,7 @@ class AeroDiagnosticsGUI:
         self.txt_log.tag_configure("error", foreground=DANGER)
 
     def _build_footer(self):
-        bar = tk.Frame(self.root, bg=BG, padx=22, pady=7)
+        bar = tk.Frame(self.root, bg=BG, padx=28, pady=10)
         bar.pack(fill=tk.X)
         wordmark = self._load_image("wordmark-white.png", 16)
         if wordmark is not None:
@@ -922,7 +987,8 @@ class AeroDiagnosticsGUI:
         else:
             self.progress.stop()
             self.progress.configure(mode="determinate")
-            self.progress["value"] = 100 if color == SUCCESS else 0
+            # a riposo la barra resta neutra (non deve sembrare un divisorio giallo)
+            self.progress["value"] = 0
 
     # ------------------------------------------------------------------ log console
     def _log(self, msg: str):
