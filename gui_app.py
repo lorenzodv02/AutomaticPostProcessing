@@ -24,6 +24,7 @@ from tkinter import ttk, filedialog, messagebox
 import brand
 from brand import asset_path as brand_asset
 from brand import families as brand_families
+from analyzer.ai_vision_advisor import AI_PROVIDERS
 from config_bridge import validate_config
 from meta_driver.launcher import find_meta_executable
 from file_discovery import try_discover
@@ -519,6 +520,10 @@ class AeroDiagnosticsGUI:
         self.var_vinf = tk.StringVar(value=str(refs.get("velocity_inf", 16.67)))
         self.var_rho = tk.StringVar(value=str(refs.get("density_air", 1.225)))
         self.var_apikey = tk.StringVar(value=ai.get("api_key", ""))
+        self.var_provider = tk.StringVar(
+            value=str(ai.get("provider", "gemini")).strip().lower()
+            if str(ai.get("provider", "gemini")).strip().lower() in AI_PROVIDERS else "gemini"
+        )
         self.var_auto_open = tk.BooleanVar(value=True)
         self.var_show_key = tk.BooleanVar(value=False)
 
@@ -812,8 +817,19 @@ class AeroDiagnosticsGUI:
                                        kind="ghost", font=(FONT_UI, 8, "bold"))
         self.btn_show_key.pack(side=tk.LEFT, padx=(8, 0))
 
+        provider_row = tk.Frame(body, bg=SURFACE)
+        provider_row.pack(fill=tk.X, pady=(8, 0))
+        field_label(provider_row, "Provider AI", "gemini · openai · deepseek").pack(side=tk.LEFT)
+        self.cmb_provider = ttk.Combobox(
+            provider_row, textvariable=self.var_provider, values=list(AI_PROVIDERS),
+            state="readonly", width=11, style="Modern.TCombobox", font=(FONT_UI, 9),
+        )
+        self.cmb_provider.pack(side=tk.RIGHT)
+
         tk.Label(
-            body, text="Gemini / OpenAI per il commento aerodinamico sulle immagini. "
+            body, text="Gemini, OpenAI o DeepSeek per il commento aerodinamico sulle immagini. "
+                       "Con DeepSeek si usa il modello con vision e il thinking mode "
+                       "(config.yaml: model_deepseek, deepseek_reasoning_effort). "
                        "Può essere lasciata vuota: il motore esperto offline resta attivo.",
             bg=SURFACE, fg=FAINT, font=(FONT_UI, 8), wraplength=370,
             justify="left",
@@ -1189,7 +1205,9 @@ class AeroDiagnosticsGUI:
         self.config.setdefault("reference_values", {})["velocity_inf"] = vinf
         self.config["reference_values"]["density_air"] = rho
         if self.var_apikey.get().strip():
-            self.config.setdefault("ai_vision", {})["api_key"] = self.var_apikey.get().strip()
+            ai_cfg = self.config.setdefault("ai_vision", {})
+        ai_cfg["api_key"] = self.var_apikey.get().strip()
+        ai_cfg["provider"] = self.var_provider.get().strip().lower()
 
         self._busy = True
         self.btn_run.set_enabled(False)

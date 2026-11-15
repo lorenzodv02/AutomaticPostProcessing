@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.6.0-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.5.0
+python main.py --version      # FS-MetaPostDiag 1.6.0
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,20 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.6.0 — DeepSeek come provider AI Vision (con thinking)
+
+Oltre a Gemini e OpenAI, il commento aerodinamico sulle immagini può usare **DeepSeek**: modello con vision + thinking mode, selezionabile dalla GUI o dal config.
+
+- **Provider** `deepseek` in `ai_vision.provider` (o dal menu a tendina accanto alla API key).
+- **Modello** `deepseek-flash` — è il nome API ufficiale di DeepSeek-V4.1-Flash, l'unico che accetta immagini (`config.yaml` → `model_deepseek`).
+- **Thinking**: `deepseek_thinking: true` e `deepseek_reasoning_effort: "high"` (`low` | `high` | `max`). Nella richiesta viaggiano `thinking: {"type": "enabled"}` e `reasoning_effort`; in thinking mode temperatura e penalty non sono ammesse e non vengono inviate.
+- **Immagini** in data-URL base64 (`image_url`), come da documentazione DeepSeek: fino a 4 viste annotate + 2 grafici, stessa selezione degli altri provider.
+- **Chiave**: `api_key` nel config/GUI oppure variabile d'ambiente `DEEPSEEK_API_KEY`.
+- **Errori leggibili**: se il nome modello non esiste, il log elenca i modelli disponibili per quella chiave (`GET /models`) e la pipeline ripiega sul motore esperto locale, senza interrompersi.
+- Validazione del config estesa: provider sconosciuto o `reasoning_effort` non valido producono un avviso `[CONFIG-WARN]`.
+
+Sorgenti: [Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/), [Vision](https://api-docs.deepseek.com/guides/vision), [Lists Models](https://api-docs.deepseek.com/api/list-models).
 
 ### v1.5.0 — il config viene validato, e `wheelbase` serve davvero
 

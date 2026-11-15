@@ -255,9 +255,15 @@ assemblies:
 # Configurazione Vision AI (Opzionale: Gemini o OpenAI per commento aerodinamico avanzato sulle foto)
 ai_vision:
   enabled: true
-  provider: "gemini"       # "gemini" oppure "openai"
+  provider: "gemini"       # "gemini" | "openai" | "deepseek"
   model_gemini: "gemini-3.8-flash"
   model_openai: "gpt-4o"
-  # La chiave API puo' essere letta da variabile d'ambiente GEMINI_API_KEY / OPENAI_API_KEY o inserita qui/nella GUI
+  # DeepSeek: id API ufficiale "deepseek-flash" (= DeepSeek-V4.1-Flash), con vision
+  # e thinking mode controllabile (deepseek_thinking + deepseek_reasoning_effort).
+  model_deepseek: "deepseek-flash"
+  deepseek_thinking: true
+  deepseek_reasoning_effort: "high"   # low | high | max
+  # La chiave API puo' essere letta da variabile d'ambiente
+  # GEMINI_API_KEY / OPENAI_API_KEY / DEEPSEEK_API_KEY, oppure inserita qui/nella GUI
   api_key: ""
   language: "it"

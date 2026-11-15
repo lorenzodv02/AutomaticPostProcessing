@@ -22,6 +22,7 @@ MODULES = (
     "tests.test_version",
     "tests.test_packaging",
     "tests.test_discovery",
+    "tests.test_ai_vision",
     "tests.test_brand",
     "tests.test_meta_locator",
 )

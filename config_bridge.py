@@ -100,6 +100,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "provider": "gemini",
         "model_gemini": "gemini-3.8-flash",
         "model_openai": "gpt-4o",
+        "model_deepseek": "deepseek-flash",
+        "deepseek_thinking": True,
+        "deepseek_reasoning_effort": "high",
         "api_key": "",
         "language": "it",
     },
@@ -355,6 +358,20 @@ def validate_config(config: Dict[str, Any]) -> List[str]:
                 "wheelbase = %.3f m non concorda con gli assi (|rear_axle_x - front_axle_x| = %.3f m)."
                 % (float(wheelbase), span)
             )
+
+    ai = _as_dict(cfg.get("ai_vision"))
+    provider = str(ai.get("provider", "gemini") or "").strip().lower()
+    if provider not in ("gemini", "openai", "deepseek"):
+        warnings.append(
+            "ai_vision.provider = '%s' non riconosciuto: uso 'gemini' (valori ammessi: gemini, openai, deepseek)."
+            % ai.get("provider")
+        )
+    effort = str(ai.get("deepseek_reasoning_effort", "high") or "").strip().lower()
+    if provider == "deepseek" and effort not in ("low", "high", "max"):
+        warnings.append(
+            "ai_vision.deepseek_reasoning_effort = '%s' non valido: uso 'high' (valori ammessi: low, high, max)."
+            % ai.get("deepseek_reasoning_effort")
+        )
 
     fluent = cfg.get("fluent_variables")
     if fluent is not None and not isinstance(fluent, dict):

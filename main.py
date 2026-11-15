@@ -190,8 +190,11 @@ def main():
     if args.meta_exe:
         cfg["meta"]["executable_path"] = args.meta_exe
     if args.ai_model:
-        provider = str(cfg.get("ai_vision", {}).get("provider", "gemini")).lower()
-        model_key = "model_openai" if provider == "openai" else "model_gemini"
+        provider = str(cfg.get("ai_vision", {}).get("provider", "gemini")).strip().lower()
+        model_key = {
+            "openai": "model_openai",
+            "deepseek": "model_deepseek",
+        }.get(provider, "model_gemini")
         cfg.setdefault("ai_vision", {})[model_key] = args.ai_model
 
     if args.gui or _launch_gui_by_default(len(sys.argv)):

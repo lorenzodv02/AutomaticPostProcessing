@@ -6,8 +6,113 @@ dal file .cas e .dat (nodi, triangoli, integrali per singolo PID, condizione di 
 e sulle immagini verificate.
 """
 
-import os
 import base64
+import json
+import os
+import urllib.error
+import urllib.request
+
+# DeepSeek espone un endpoint compatibile con le Chat Completions di OpenAI sia
+# per il testo sia per le immagini. Il modello con vision e' `deepseek-flash`
+# (nome commerciale DeepSeek-V4.1-Flash); il thinking mode si controlla con
+# `reasoning_effort` e con il blocco `thinking`.
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_DEFAULT_MODEL = "deepseek-flash"
+DEEPSEEK_EFFORTS = ("low", "high", "max")
+AI_PROVIDERS = ("gemini", "openai", "deepseek")
+
+# MIME dichiarato nell'URL inline: DeepSeek riconosce comunque il formato dal
+# contenuto, ma un MIME coerente evita ambiguita' nei proxy.
+_IMAGE_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
+
+
+def image_data_url(path: str) -> str:
+    """Immagine locale come data-URL base64 (formato richiesto da DeepSeek/OpenAI)."""
+    mime = _IMAGE_MIME.get(os.path.splitext(str(path))[1].lower(), "image/png")
+    with open(path, "rb") as handle:
+        encoded = base64.b64encode(handle.read()).decode("ascii")
+    return "data:%s;base64,%s" % (mime, encoded)
+
+
+def build_deepseek_payload(ai_cfg: dict, prompt: str, image_paths) -> dict:
+    """
+    Body della richiesta DeepSeek: testo + immagini + thinking mode.
+
+    Riferimenti (api-docs.deepseek.com): il thinking e' attivo di default con
+    effort `high`; `reasoning_effort` accetta low/high/max e `thinking` accetta
+    {"type": "enabled" | "disabled"}. In thinking mode temperatura e penalty
+    sono ignorate, quindi non vengono inviate.
+    """
+    blocks = [{"type": "text", "text": prompt}]
+    for path in image_paths or []:
+        blocks.append({"type": "image_url", "image_url": {"url": image_data_url(path)}})
+
+    effort = str(ai_cfg.get("deepseek_reasoning_effort", "high") or "high").strip().lower()
+    if effort not in DEEPSEEK_EFFORTS:
+        effort = "high"
+    thinking_enabled = bool(ai_cfg.get("deepseek_thinking", True))
+
+    payload = {
+        "model": str(ai_cfg.get("model_deepseek") or DEEPSEEK_DEFAULT_MODEL),
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT_AERO},
+            {"role": "user", "content": blocks},
+        ],
+        "stream": False,
+        "thinking": {"type": "enabled" if thinking_enabled else "disabled"},
+    }
+    if thinking_enabled:
+        payload["reasoning_effort"] = effort
+    return payload
+
+
+def extract_deepseek_answer(response_json: dict):
+    """(testo, ragionamento) dalla risposta Chat Completions di DeepSeek."""
+    choices = response_json.get("choices") or []
+    if not choices:
+        return "", ""
+    message = choices[0].get("message") or {}
+    return (message.get("content") or "", message.get("reasoning_content") or "")
+
+
+def _deepseek_http(method: str, path: str, api_key: str, body: dict = None, timeout: int = 120):
+    url = DEEPSEEK_BASE_URL + path
+    data = None
+    headers = {
+        "Authorization": "Bearer " + api_key,
+        "Accept": "application/json",
+    }
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def deepseek_available_models(api_key: str) -> list:
+    """
+    Id dei modelli utilizzabili con questa chiave (GET /models).
+
+    Serve solo a rendere leggibile l'errore quando il nome modello e' sbagliato:
+    non fa fallire nulla se la chiamata non riesce.
+    """
+    try:
+        payload = _deepseek_http("GET", "/models", api_key, None, timeout=20)
+        return [str(item.get("id")) for item in (payload.get("data") or []) if item.get("id")]
+    except Exception:
+        return []
+
+
+def deepseek_ask(api_key: str, payload: dict) -> dict:
+    """POST /chat/completions con il body gia' costruito."""
+    return _deepseek_http("POST", "/chat/completions", api_key, payload)
 
 
 SYSTEM_PROMPT_AERO = """Sei il Chief Aerodynamicist di un team di Formula Student.
@@ -106,12 +211,16 @@ def generate_ai_vision_commentary(
     i dati reali verificati per PID, oppure utilizza il sintetizzatore fisico deterministico verificato.
     """
     ai_cfg = config.get("ai_vision", {})
-    provider = (ai_cfg.get("provider") or "gemini").lower()
+    provider = (ai_cfg.get("provider") or "gemini").strip().lower()
+    if provider not in AI_PROVIDERS:
+        print("[INFO] Provider AI '%s' non riconosciuto: uso 'gemini'." % provider)
+        provider = "gemini"
     api_key = (
         ai_cfg.get("api_key")
         or os.environ.get("GEMINI_API_KEY")
         or os.environ.get("GOOGLE_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
+        or os.environ.get("DEEPSEEK_API_KEY")
         or ""
     ).strip()
 
@@ -183,6 +292,43 @@ def generate_ai_vision_commentary(
                 }
             except Exception as exc:
                 print(f"[INFO] Chiamata API OpenAI Vision non completata ({exc}). Uso sintetizzatore dati reali.")
+
+        elif provider == "deepseek":
+            # Fonte: api-docs.deepseek.com (chat completions compatibile OpenAI,
+            # vision con image_url data-URL, thinking mode con reasoning_effort).
+            payload = None
+            try:
+                payload = build_deepseek_payload(ai_cfg, user_context, selected_image_paths[:4])
+                body = deepseek_ask(api_key, payload)
+                text, reasoning = extract_deepseek_answer(body)
+                if text:
+                    effort = payload.get("reasoning_effort")
+                    label = payload["model"]
+                    if effort:
+                        label += ", thinking " + str(effort)
+                    if reasoning:
+                        print("[INFO] DeepSeek thinking: %d caratteri di ragionamento." % len(reasoning))
+                    return {
+                        "source": "DeepSeek Vision (%s)" % label,
+                        "commentary_markdown": text,
+                    }
+                print("[INFO] DeepSeek non ha restituito testo utile. Uso sintetizzatore dati reali.")
+            except urllib.error.HTTPError as exc:
+                detail = ""
+                try:
+                    detail = exc.read().decode("utf-8", "ignore")[:300]
+                except Exception:
+                    detail = ""
+                hint = ""
+                if exc.code in (400, 404):
+                    models = deepseek_available_models(api_key)
+                    if models:
+                        hint = " Modelli disponibili: " + ", ".join(models[:8]) + "."
+                model = (payload or {}).get("model", DEEPSEEK_DEFAULT_MODEL)
+                print(f"[INFO] DeepSeek API non completata (HTTP {exc.code}, modello '{model}').{hint} "
+                      f"Dettaglio: {detail}")
+            except Exception as exc:
+                print(f"[INFO] Chiamata API DeepSeek non completata ({exc}). Uso sintetizzatore dati reali.")
 
     return {
         "source": "Motore Diagnostico Verificato su Dati Binari .CAS/.DAT & Mesh 3D Reale",
