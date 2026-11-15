@@ -486,6 +486,17 @@ def build_diagnostic_reports(
         """
 
     ai_html_body = _md_to_simple_html(ai_review.get("commentary_markdown", ""))
+    # Se la perizia viene dal motore locale, il report deve dire il motivo:
+    # "AI non usata" senza spiegazione lascia il lettore nel dubbio.
+    ai_status = ai_review.get("ai_status") or {}
+    ai_status_reason = str(ai_status.get("reason") or "").strip()
+    ai_status_html = ""
+    if str(ai_status.get("mode") or "") == "local" and ai_status_reason:
+        ai_status_html = (
+            '<div class="ai-status-note">AI Vision non usata &middot; '
+            + html.escape(ai_status_reason)
+            + "</div>"
+        )
     stall_color = "#ef233c" if stall_val > 10.0 else ("#f77f00" if stall_val > 4.0 else "#D8EEFC")
 
     monogram_uri = _brand_monogram_uri()
@@ -764,6 +775,15 @@ def build_diagnostic_reports(
         .plot-card h4 {{ margin-bottom: 10px; color: #fff; font-size: 0.98rem; }}
         .plot-card img {{ width: 100%; border-radius: 10px; background: white; margin-bottom: 10px; }}
         .plot-card p {{ font-size: 0.86rem; color: var(--text-muted); }}
+        .ai-status-note {{
+            background: rgba(253, 235, 25, 0.10);
+            border-left: 3px solid var(--gold);
+            color: var(--gold);
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-bottom: 16px;
+            font-size: 0.86rem;
+        }}
         .ai-review-content h3.ai-subtitle {{ color: var(--gold); margin: 18px 0 10px 0; font-size: 1.05rem; }}
         .ai-review-content ul.ai-list {{ margin-left: 22px; margin-bottom: 14px; }}
         .ai-review-content li {{ margin-bottom: 8px; }}
@@ -941,6 +961,7 @@ def build_diagnostic_reports(
             <span>3. Relazione Tecnica Aerodinamica sui Dati Estratti</span>
             <span style="font-size: 0.85rem; color: var(--accent-blue);">Fonte: {html.escape(ai_review.get('source', ''))}</span>
         </div>
+        {ai_status_html}
         <div class="ai-review-content">
             {ai_html_body}
         </div>
@@ -1135,8 +1156,12 @@ def build_diagnostic_reports(
 
     md_lines.extend([
         "## Relazione Tecnica Aerodinamica",
-        ai_review.get("commentary_markdown", "")
+        f"**Fonte:** {ai_review.get('source', '')}",
+        "",
     ])
+    if ai_status_reason and str(ai_status.get("mode") or "") == "local":
+        md_lines.extend([f"> AI Vision non usata: {ai_status_reason}", ""])
+    md_lines.append(ai_review.get("commentary_markdown", ""))
 
     md_report_path = os.path.join(output_dir, "CFD_Aero_Diagnostic_Report.md")
     with open(md_report_path, "w", encoding="utf-8") as f:

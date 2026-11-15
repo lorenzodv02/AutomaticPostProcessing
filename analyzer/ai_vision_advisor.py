@@ -32,6 +32,23 @@ _IMAGE_MIME = {
 }
 
 
+def _ai_status(mode: str, provider: str = "", reason: str = "", model: str = "") -> dict:
+    """
+    Stato della perizia AI: chi l'ha prodotta e, se e' il motore locale, perche'.
+
+    Serve al report: senza questo campo il lettore vede solo "Fonte: motore
+    esperto" e non sa se l'AI e' disattivata, senza chiave o in errore.
+    """
+    return {"mode": mode, "provider": provider, "model": model, "reason": reason}
+
+
+def _short_error(exc) -> str:
+    """Messaggio d'errore compatto per il report (senza stack)."""
+    text = str(exc) or type(exc).__name__
+    text = text.replace("\n", " ").strip()
+    return text[:140]
+
+
 def image_data_url(path: str) -> str:
     """Immagine locale come data-URL base64 (formato richiesto da DeepSeek/OpenAI)."""
     mime = _IMAGE_MIME.get(os.path.splitext(str(path))[1].lower(), "image/png")
@@ -215,6 +232,7 @@ def generate_ai_vision_commentary(
     if provider not in AI_PROVIDERS:
         print("[INFO] Provider AI '%s' non riconosciuto: uso 'gemini'." % provider)
         provider = "gemini"
+    local_reason = ""
     api_key = (
         ai_cfg.get("api_key")
         or os.environ.get("GEMINI_API_KEY")
@@ -262,9 +280,12 @@ def generate_ai_vision_commentary(
                 if resp and getattr(resp, "text", None):
                     return {
                         "source": f"Google Gemini Vision ({ai_cfg.get('model_gemini', 'gemini-3.8-flash')})",
-                        "commentary_markdown": resp.text
+                        "commentary_markdown": resp.text,
+                        "ai_status": _ai_status("ai", "gemini", "",
+                                                ai_cfg.get("model_gemini", "gemini-3.8-flash")),
                     }
             except Exception as exc:
+                local_reason = "Gemini non ha risposto (%s)." % _short_error(exc)
                 print(f"[INFO] Chiamata API Gemini Vision non completata ({exc}). Uso sintetizzatore dati reali.")
 
         elif provider == "openai":
@@ -288,9 +309,12 @@ def generate_ai_vision_commentary(
                 )
                 return {
                     "source": f"OpenAI Vision ({ai_cfg.get('model_openai', 'gpt-4o')})",
-                    "commentary_markdown": resp.choices[0].message.content
+                    "commentary_markdown": resp.choices[0].message.content,
+                    "ai_status": _ai_status("ai", "openai", "",
+                                            ai_cfg.get("model_openai", "gpt-4o")),
                 }
             except Exception as exc:
+                local_reason = "OpenAI non ha risposto (%s)." % _short_error(exc)
                 print(f"[INFO] Chiamata API OpenAI Vision non completata ({exc}). Uso sintetizzatore dati reali.")
 
         elif provider == "deepseek":
@@ -311,7 +335,9 @@ def generate_ai_vision_commentary(
                     return {
                         "source": "DeepSeek Vision (%s)" % label,
                         "commentary_markdown": text,
+                        "ai_status": _ai_status("ai", "deepseek", "", payload["model"]),
                     }
+                local_reason = "DeepSeek ha risposto senza testo utile."
                 print("[INFO] DeepSeek non ha restituito testo utile. Uso sintetizzatore dati reali.")
             except urllib.error.HTTPError as exc:
                 detail = ""
@@ -325,12 +351,24 @@ def generate_ai_vision_commentary(
                     if models:
                         hint = " Modelli disponibili: " + ", ".join(models[:8]) + "."
                 model = (payload or {}).get("model", DEEPSEEK_DEFAULT_MODEL)
+                local_reason = "DeepSeek ha risposto HTTP %s (modello '%s')." % (exc.code, model)
                 print(f"[INFO] DeepSeek API non completata (HTTP {exc.code}, modello '{model}').{hint} "
                       f"Dettaglio: {detail}")
             except Exception as exc:
+                local_reason = "DeepSeek non ha risposto (%s)." % _short_error(exc)
                 print(f"[INFO] Chiamata API DeepSeek non completata ({exc}). Uso sintetizzatore dati reali.")
+
+    if not local_reason:
+        if not ai_cfg.get("enabled", True):
+            local_reason = "AI Vision disattivata nel config (ai_vision.enabled = false)."
+        elif not api_key:
+            local_reason = ("Nessuna API key configurata per il provider '%s': la perizia viene dal "
+                            "motore esperto locale." % provider)
+        else:
+            local_reason = "AI Vision non disponibile: perizia dal motore esperto locale."
 
     return {
         "source": "Motore Diagnostico Verificato su Dati Binari .CAS/.DAT & Mesh 3D Reale",
-        "commentary_markdown": _build_local_expert_review(session_bundle, cv_results, design_issues)
+        "commentary_markdown": _build_local_expert_review(session_bundle, cv_results, design_issues),
+        "ai_status": _ai_status("local", provider, local_reason),
     }

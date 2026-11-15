@@ -119,6 +119,9 @@ def test_without_api_key_uses_local_engine():
     )
     assert "Motore Diagnostico" in result["source"]
     assert result["commentary_markdown"]
+    status = result["ai_status"]
+    assert status["mode"] == "local"
+    assert "API key" in status["reason"], status
 
 
 def test_deepseek_success_reports_model_and_thinking():
@@ -133,6 +136,11 @@ def test_deepseek_success_reports_model_and_thinking():
     assert "DeepSeek Vision" in result["source"]
     assert "thinking high" in result["source"]
     assert result["commentary_markdown"] == "perizia DeepSeek"
+    status = result["ai_status"]
+    assert status["mode"] == "ai"
+    assert status["provider"] == "deepseek"
+    assert status["model"] == "deepseek-flash"
+    assert status["reason"] == ""
 
 
 def test_http_error_falls_back_and_lists_models():
@@ -147,6 +155,9 @@ def test_http_error_falls_back_and_lists_models():
             _config(model_deepseek="modello-sbagliato"), _session(), {}, [], []
         )
     assert "Motore Diagnostico" in result["source"]
+    status = result["ai_status"]
+    assert status["mode"] == "local"
+    assert "HTTP 400" in status["reason"], status
 
 
 def test_unknown_provider_falls_back_to_gemini():
@@ -167,3 +178,11 @@ def test_image_data_url_detects_mime():
         assert advisor.image_data_url(path).startswith("data:image/jpeg;base64,")
     finally:
         shutil.rmtree(folder, ignore_errors=True)
+
+def test_disabled_ai_reports_reason():
+    """Con l'AI disattivata il report deve dire il motivo, non solo 'motore locale'."""
+    result = advisor.generate_ai_vision_commentary(
+        _config(enabled=False, api_key="chiave-finta"), _session(), {}, [], []
+    )
+    assert result["ai_status"]["mode"] == "local"
+    assert "disattivata" in result["ai_status"]["reason"], result["ai_status"]

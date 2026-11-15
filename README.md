@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![CFD Support](https://img.shields.io/badge/CFD-ANSYS%20Fluent%20(.cas%20%2F%20.dat)-orange.svg)]()
 [![Post-Processor](https://img.shields.io/badge/Post--Processor-BETA%20CAE%20META-red.svg)]()
-[![Version](https://img.shields.io/badge/version-1.6.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.6.1-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 Suite completa in Python progettata per l'automazione ad alte prestazioni del **post-processing CFD** e della **diagnostica fluidodinamica** per monoposto **Formula Student** e vetture da competizione. 
@@ -65,7 +65,7 @@ Su **Windows** (1-Click):
 Oppure manualmente da terminale:
 ```bash
 pip install -r requirements.txt
-python main.py --version      # FS-MetaPostDiag 1.6.0
+python main.py --version      # FS-MetaPostDiag 1.6.1
 ```
 
 Le librerie richieste sono:
@@ -235,6 +235,15 @@ Questo progetto è distribuito sotto licenza **MIT**. Consulta il file `LICENSE`
 ---
 
 ## 📝 Changelog
+
+### v1.6.1 — il report dice se (e perché) l'AI Vision non è stata usata
+
+Prima, quando la perizia veniva dal motore locale, il report mostrava solo `Fonte: Motore Diagnostico Verificato ...`: non si capiva se l'AI fosse disattivata, senza chiave o in errore.
+
+- Nuovo campo `ai_status` (`mode: "ai" | "local"`, `provider`, `model`, `reason`) restituito da `generate_ai_vision_commentary`.
+- Nel dossier HTML, sotto il titolo della sezione 3, compare una **nota gialla**: *"AI Vision non usata · Nessuna API key configurata per il provider 'gemini': la perizia viene dal motore esperto locale."*
+- Stessa informazione nel **Markdown** (`Fonte:` + nota) e nel log.
+- Motivi distinti: chiave assente, AI disattivata, provider sconosciuto, errore HTTP (con codice e modello), risposta vuota.
 
 ### v1.6.0 — DeepSeek come provider AI Vision (con thinking)
 
